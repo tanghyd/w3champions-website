@@ -7,6 +7,7 @@ const data = {
       tournaments: "Tournaments",
       rankings: "Rankings",
       matches: "Matches",
+      warehouse: "Warehouse",
       statistics: "Statistics",
       admin: "Admin",
       faq: "FAQ",

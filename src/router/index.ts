@@ -22,6 +22,7 @@ import PlayerMatchesTab from "@/components/player/tabs/PlayerMatchesTab.vue";
 import PlayerProfileTab from "@/components/player/tabs/PlayerProfileTab.vue";
 import TournamentDetail from "@/views/TournamentDetail.vue";
 import Rewards from "@/views/Rewards.vue";
+import Warehouse from "@/views/Warehouse.vue";
 import PatreonCallback from "@/views/PatreonCallback.vue";
 import SsoContinue from "@/views/SsoContinue.vue";
 import PlayerStatisticTab from "@/components/player/tabs/PlayerStatisticTab.vue";
@@ -325,6 +326,11 @@ const routes: RouteRecordRaw[] = [
     name: EMainRouteName.TOURNAMENT,
     props: true,
     component: TournamentDetail,
+  },
+  {
+    path: "/warehouse",
+    name: EMainRouteName.WAREHOUSE,
+    component: Warehouse,
   },
 ];
 

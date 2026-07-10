@@ -7,6 +7,7 @@ declare global {
       INGAME_STATIC_RESOURCES_URL: string;
       BNET_API_CLIENT_ID: string;
       TURNSTILE_SITE_KEY: string;
+      WAREHOUSE_URL?: string;
     };
   }
 }
@@ -28,3 +29,5 @@ export const LAUNCHER_UPDATE_URL = _launcherUrl;
 export const INGAME_STATIC_RESOURCES_URL = _ingameUrlStaticResourcesUrl;
 export const BNET_API_CLIENT_ID = _bnetApiClientId;
 export const TURNSTILE_SITE_KEY = _turnstileSiteKey;
+// w3warehouse dashboard (htmx app) embedded under /warehouse. Defaults to the local demo stack.
+export const WAREHOUSE_URL = window._env_.WAREHOUSE_URL ?? "http://localhost:8000";

@@ -21,4 +21,7 @@ window._env_ = {
 
   //* Turnstile site key
   TURNSTILE_SITE_KEY: "0x4AAAAAAB0hhXF_QHDGwhjQ",
+
+  //* w3warehouse dashboard embedded under /warehouse (local demo stack: docker compose up in ../w3warehouse)
+  WAREHOUSE_URL: "http://localhost:8000",
 };

@@ -182,6 +182,7 @@ import {
   mdiClose,
   mdiCog,
   mdiControllerClassic,
+  mdiDatabase,
   mdiHelpCircleOutline,
   mdiInvertColors,
   mdiLogout,
@@ -241,6 +242,11 @@ export default defineComponent({
         title: "matches",
         icon: mdiControllerClassic,
         to: EMainRouteName.MATCHES,
+      },
+      {
+        title: "warehouse",
+        icon: mdiDatabase,
+        to: EMainRouteName.WAREHOUSE,
       },
       {
         title: "statistics",

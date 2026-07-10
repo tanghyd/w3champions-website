@@ -59,6 +59,7 @@ export enum EMainRouteName {
   TOURNAMENTS = "Tournaments",
   TOURNAMENT = "Tournament",
   SSO_CONTINUE = "SsoContinue",
+  WAREHOUSE = "Warehouse",
 }
 
 export enum EPlayerRouteName {
