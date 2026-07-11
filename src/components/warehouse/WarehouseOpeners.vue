@@ -44,7 +44,7 @@
     <!-- Breadcrumb of the current opener prefix. -->
     <div class="d-flex align-center flex-wrap ga-2 mb-3">
       <v-chip size="small" variant="tonal" :class="{ 'wh-crumb-clickable': prefix.length }" @click="jumpTo(0)">
-        <race-icon :race="raceEnum(myRace)" />
+        <race-icon :key="myRace" :race="raceEnum(myRace)" />
         <span class="ml-1">{{ $t("components_warehouse_openers.opening") }}</span>
       </v-chip>
       <template v-for="(code, idx) in prefix" :key="idx">

@@ -21,7 +21,7 @@
       <v-row v-if="heroGroups.length">
         <v-col v-for="group in heroGroups" :key="group.race" cols="12" sm="6" md="3">
           <div class="d-flex align-center ga-2 mb-1">
-            <race-icon :race="raceEnum(group.race)" />
+            <race-icon :key="group.race" :race="raceEnum(group.race)" />
             <span class="text-subtitle-2">{{ $t(`races.${raceKey(group.race)}`) }}</span>
           </div>
           <div v-if="group.heroes.length" class="chart-wrap" style="position: relative">

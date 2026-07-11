@@ -50,7 +50,7 @@
                     {{ p.name }}
                   </router-link>
                   <span v-if="p.old_mmr != null" class="number-text text-medium-emphasis wh-mmr">{{ p.old_mmr }}</span>
-                  <player-icon :race="raceEnum(p.race)" :left="false" />
+                  <player-icon :key="p.race" :race="raceEnum(p.race)" :left="false" />
                 </div>
               </div>
 
@@ -62,7 +62,7 @@
                   :key="p.player_id"
                   class="wh-player"
                 >
-                  <player-icon :race="raceEnum(p.race)" :left="true" />
+                  <player-icon :key="p.race" :race="raceEnum(p.race)" :left="true" />
                   <router-link
                     :to="profileUrl(p.name)"
                     class="wh-name w3-lost"

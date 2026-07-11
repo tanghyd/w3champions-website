@@ -118,18 +118,24 @@ function buildRequest(): SearchRequest {
   return req;
 }
 
+// Guard against out-of-order responses: only the newest request may write state.
+let loadSeq = 0;
+
 async function load(): Promise<void> {
+  const seq = ++loadSeq;
   loading.value = true;
   apiError.value = "";
   try {
     const res = await WarehouseService.browse(buildRequest());
+    if (seq !== loadSeq) return;
     replays.value = res.replays;
     page.value = 1;
   } catch (e) {
+    if (seq !== loadSeq) return;
     apiError.value = e instanceof Error ? e.message : "Browse failed";
     replays.value = [];
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 

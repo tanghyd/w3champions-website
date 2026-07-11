@@ -179,10 +179,10 @@ import {
   mdiAccountCircleOutline,
   mdiAccountTie,
   mdiChartAreaspline,
+  mdiChartBox,
   mdiClose,
   mdiCog,
   mdiControllerClassic,
-  mdiDatabase,
   mdiHelpCircleOutline,
   mdiInvertColors,
   mdiLogout,
@@ -245,7 +245,7 @@ export default defineComponent({
       },
       {
         title: "warehouse",
-        icon: mdiDatabase,
+        icon: mdiChartBox,
         to: EMainRouteName.WAREHOUSE,
       },
       {

@@ -1,5 +1,5 @@
 import { WAREHOUSE_URL } from "@/config/env";
-import type { EventType, MapEntry, MappingEntry, MmrStats, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, ReplayMetadata, SearchRequest, SearchResponse, SeasonEntry, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
+import type { EventType, MapEntry, MappingEntry, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, SearchRequest, SearchResponse, SeasonEntry, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
 
 // WAREHOUSE_URL may carry a trailing slash; the API lives under <base>/v1.
 const BASE = WAREHOUSE_URL.replace(/\/$/, "");
@@ -55,10 +55,6 @@ async function toError(response: Response): Promise<Error> {
 }
 
 export default class WarehouseService {
-  public static getReplays(limit = 50, offset = 0): Promise<ReplayMetadata[]> {
-    return getJson<ReplayMetadata[]>(`/replays?limit=${limit}&offset=${offset}`);
-  }
-
   public static browse(req: SearchRequest): Promise<SearchResponse> {
     return postJson<SearchResponse>("/browse", req);
   }
@@ -79,10 +75,6 @@ export default class WarehouseService {
 
   public static getSeasons(): Promise<SeasonEntry[]> {
     return getJson<SeasonEntry[]>("/seasons");
-  }
-
-  public static getMmrStats(): Promise<MmrStats> {
-    return getJson<MmrStats>("/mmr-stats");
   }
 
   public static getHealth(): Promise<WarehouseHealth> {

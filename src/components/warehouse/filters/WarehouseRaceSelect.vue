@@ -2,7 +2,7 @@
   <v-menu location="bottom start">
     <template v-slot:activator="{ props }">
       <v-btn tile class="w3-dropdown-button" style="background-color: transparent" v-bind="props">
-        <race-icon v-if="modelValue" :race="raceEnum(modelValue)" class="mr-2" />
+        <race-icon v-if="modelValue" :key="modelValue" :race="raceEnum(modelValue)" class="mr-2" />
         <v-icon v-else size="x-large" start>{{ mdiShield }}</v-icon>
         {{ buttonLabel }}
       </v-btn>

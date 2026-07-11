@@ -332,7 +332,12 @@ const routes: RouteRecordRaw[] = [
     component: TournamentDetail,
   },
   {
+    // Preserve links to the pre-rename path.
     path: "/warehouse",
+    redirect: { name: EWarehouseRouteName.REPLAYS },
+  },
+  {
+    path: "/analytics",
     name: EMainRouteName.WAREHOUSE,
     component: Warehouse,
     redirect: { name: EWarehouseRouteName.REPLAYS },

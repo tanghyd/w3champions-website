@@ -42,6 +42,7 @@
         @update:model-value="(v) => (playerNames = v)"
       />
       <v-switch
+        v-if="playerNames.length >= 2"
         v-model="playersMatchAll"
         :label="$t('components_warehouse_search.matchAllPlayers')"
         density="compact"
@@ -58,7 +59,9 @@
       class="mb-3 wh-group-card"
     >
       <v-card-title class="d-flex align-center py-2">
-        <span class="text-subtitle-1">{{ $t("components_warehouse_search.group") }} {{ gIdx + 1 }}</span>
+        <span class="text-subtitle-1">
+          {{ gIdx === 0 ? $t("components_warehouse_search.groupYours") : $t("components_warehouse_search.groupOpponent") }}
+        </span>
         <v-spacer />
         <v-btn size="small" variant="text" @click="removeGroup(gIdx)">
           <v-icon start>{{ mdiClose }}</v-icon>
@@ -74,6 +77,9 @@
             :allow-any="false"
             @update:model-value="(v) => (group.race = v ?? 'Human')"
           />
+          <span v-if="gIdx === 1" class="text-caption text-medium-emphasis">
+            {{ $t("components_warehouse_search.groupOpponentRaceHint") }}
+          </span>
           <v-btn-toggle
             v-model="group.result"
             density="compact"
@@ -220,6 +226,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
 import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
 import WarehouseSeasonSelect from "@/components/warehouse/filters/WarehouseSeasonSelect.vue";
@@ -256,14 +263,16 @@ interface GroupForm {
   steps: StepForm[];
 }
 
-const eventTypeItems: { title: string; value: EventType }[] = [
-  { title: "Building", value: "building" },
-  { title: "Unit", value: "unit" },
-  { title: "Upgrade", value: "upgrade" },
-  { title: "Item", value: "item" },
-  { title: "Hero skill", value: "hero_skill" },
-  { title: "Hero trained", value: "hero_trained" },
-];
+const { t } = useI18n();
+
+const eventTypeItems = computed<{ title: string; value: EventType }[]>(() => [
+  { title: t("components_warehouse_search.eventBuilding"), value: "building" },
+  { title: t("components_warehouse_search.eventUnit"), value: "unit" },
+  { title: t("components_warehouse_search.eventUpgrade"), value: "upgrade" },
+  { title: t("components_warehouse_search.eventItem"), value: "item" },
+  { title: t("components_warehouse_search.eventHeroSkill"), value: "hero_skill" },
+  { title: t("components_warehouse_search.eventHeroTrained"), value: "hero_trained" },
+]);
 
 // Scope filter state
 const raceA = ref<Race | null>(null);
@@ -407,19 +416,25 @@ function buildRequest(): SearchRequest {
   return req;
 }
 
+// Guard against out-of-order responses: only the newest request may write state.
+let searchSeq = 0;
+
 async function runSearch(): Promise<void> {
+  const seq = ++searchSeq;
   loading.value = true;
   apiError.value = "";
   try {
     const res = await WarehouseService.search(buildRequest());
+    if (seq !== searchSeq) return;
     replays.value = res.replays;
     count.value = res.count;
     warnings.value = res.warnings ?? [];
     searched.value = true;
   } catch (e) {
+    if (seq !== searchSeq) return;
     apiError.value = e instanceof Error ? e.message : "Search failed";
   } finally {
-    loading.value = false;
+    if (seq === searchSeq) loading.value = false;
   }
 }
 

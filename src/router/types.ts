@@ -42,10 +42,10 @@ export enum EStatisticsRouteName {
 }
 
 export enum EWarehouseRouteName {
-  REPLAYS = "Warehouse - Replays",
-  SEARCH = "Warehouse - Search",
-  OPENERS = "Warehouse - Openers",
-  STATS = "Warehouse - Stats",
+  REPLAYS = "Analytics - Replays",
+  SEARCH = "Analytics - Search",
+  OPENERS = "Analytics - Openers",
+  STATS = "Analytics - Stats",
 }
 
 export enum EMainRouteName {
