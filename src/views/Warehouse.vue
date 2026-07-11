@@ -20,16 +20,21 @@
       </v-tabs>
 
       <v-card-subtitle class="py-2">
-        Embeds the w3warehouse replay-event dashboard. Requires the stack running at
+        The w3warehouse replay-event dashboard. Requires the stack running at
         <code>{{ baseUrl }}</code> (<code>docker compose up</code> in the w3warehouse repo).
       </v-card-subtitle>
 
-      <!-- ponytail: iframe embed reuses the whole htmx dashboard; native Vue via /v1 JSON is the upgrade path -->
-      <iframe
-        :src="activeUrl"
-        class="warehouse-frame"
-        title="w3warehouse dashboard"
-      />
+      <v-card-text>
+        <warehouse-replays v-if="tab === '/'" />
+        <warehouse-search v-else-if="tab === '/search'" />
+        <!-- ponytail: Openers and Stats have no /v1 JSON endpoints yet, so they stay iframed. -->
+        <iframe
+          v-else
+          :src="activeUrl"
+          class="warehouse-frame"
+          title="w3warehouse dashboard"
+        ></iframe>
+      </v-card-text>
     </v-card>
   </v-container>
 </template>
@@ -37,9 +42,12 @@
 <script lang="ts">
 import { computed, defineComponent, ref } from "vue";
 import { WAREHOUSE_URL } from "@/config/env";
+import WarehouseReplays from "@/components/warehouse/WarehouseReplays.vue";
+import WarehouseSearch from "@/components/warehouse/WarehouseSearch.vue";
 
 export default defineComponent({
-  name: "Warehouse",
+  name: "WarehouseView",
+  components: { WarehouseReplays, WarehouseSearch },
   setup() {
     const baseUrl = WAREHOUSE_URL.replace(/\/$/, "");
     const sections = [
@@ -49,6 +57,7 @@ export default defineComponent({
       { label: "Stats", path: "/stats" },
     ];
     const tab = ref(sections[0].path);
+    // Native tabs link to the dashboard's equivalent page; iframe tabs to themselves.
     const activeUrl = computed(() => baseUrl + tab.value);
     return { baseUrl, sections, tab, activeUrl };
   },
@@ -58,7 +67,7 @@ export default defineComponent({
 <style scoped>
 .warehouse-frame {
   width: 100%;
-  height: calc(100vh - 220px);
+  height: calc(100vh - 260px);
   min-height: 480px;
   border: 0;
   display: block;
