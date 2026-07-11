@@ -41,6 +41,13 @@ export enum EStatisticsRouteName {
   HEROES = "Statistics - Heroes",
 }
 
+export enum EWarehouseRouteName {
+  REPLAYS = "Warehouse - Replays",
+  SEARCH = "Warehouse - Search",
+  OPENERS = "Warehouse - Openers",
+  STATS = "Warehouse - Stats",
+}
+
 export enum EMainRouteName {
   HOME = "Home",
   LOGIN = "Login",

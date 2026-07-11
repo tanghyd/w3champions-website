@@ -23,6 +23,10 @@ import PlayerProfileTab from "@/components/player/tabs/PlayerProfileTab.vue";
 import TournamentDetail from "@/views/TournamentDetail.vue";
 import Rewards from "@/views/Rewards.vue";
 import Warehouse from "@/views/Warehouse.vue";
+import WarehouseReplays from "@/components/warehouse/WarehouseReplays.vue";
+import WarehouseSearch from "@/components/warehouse/WarehouseSearch.vue";
+import WarehouseOpeners from "@/components/warehouse/WarehouseOpeners.vue";
+import WarehouseStats from "@/components/warehouse/WarehouseStats.vue";
 import PatreonCallback from "@/views/PatreonCallback.vue";
 import SsoContinue from "@/views/SsoContinue.vue";
 import PlayerStatisticTab from "@/components/player/tabs/PlayerStatisticTab.vue";
@@ -61,7 +65,7 @@ import AdminPermissions from "@/components/admin/AdminPermissions.vue";
 import AdminApiTokens from "@/components/admin/AdminApiTokens.vue";
 import AdminServerLogs from "@/components/admin/AdminServerLogs.vue";
 import AdminServerLog from "@/components/admin/AdminServerLog.vue";
-import { EAdminRouteName, EMainRouteName, EPlayerRouteName, ESetupGuideRouteName, EStatisticsRouteName } from "./types";
+import { EAdminRouteName, EMainRouteName, EPlayerRouteName, ESetupGuideRouteName, EStatisticsRouteName, EWarehouseRouteName } from "./types";
 import AdminLauncherChat from "@/components/admin/AdminLauncherChat.vue";
 import AdminLagReports from "@/components/admin/AdminLagReports.vue";
 import AdminLagReportDetail from "@/components/admin/AdminLagReportDetail.vue";
@@ -331,6 +335,29 @@ const routes: RouteRecordRaw[] = [
     path: "/warehouse",
     name: EMainRouteName.WAREHOUSE,
     component: Warehouse,
+    redirect: { name: EWarehouseRouteName.REPLAYS },
+    children: [
+      {
+        path: "",
+        name: EWarehouseRouteName.REPLAYS,
+        component: WarehouseReplays,
+      },
+      {
+        path: "search",
+        name: EWarehouseRouteName.SEARCH,
+        component: WarehouseSearch,
+      },
+      {
+        path: "openers",
+        name: EWarehouseRouteName.OPENERS,
+        component: WarehouseOpeners,
+      },
+      {
+        path: "stats",
+        name: EWarehouseRouteName.STATS,
+        component: WarehouseStats,
+      },
+    ],
   },
 ];
 

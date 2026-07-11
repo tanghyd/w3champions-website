@@ -1,168 +1,89 @@
 <template>
-  <div class="warehouse-search">
-    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-3">
+  <div>
+    <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-3">
       {{ apiError }}
     </v-alert>
 
-    <!-- Scope filters -->
-    <v-card variant="outlined" class="mb-3">
-      <v-card-title class="text-subtitle-1 py-2">Filters</v-card-title>
-      <v-divider />
-      <v-card-text>
-        <div class="d-flex flex-wrap ga-3">
-          <v-select
-            v-model="matchup"
-            :items="races"
-            label="Matchup (up to 2)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-            multiple
-            chips
-            closable-chips
-            style="min-width: 240px"
-            :error="matchup.length > 2"
-          />
-          <v-autocomplete
-            v-model="mapName"
-            :items="mapNames"
-            label="Map"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-            style="min-width: 240px"
-          />
-          <v-select
-            v-model="seasons"
-            :items="seasonItems"
-            label="Seasons (default: all)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-            multiple
-            chips
-            style="min-width: 240px"
-          />
-        </div>
+    <!-- Scope filters: matchup first, then map / seasons / mmr / duration / players. -->
+    <div class="matches-filter-scroll mb-2">
+      <div class="matches-filter-row d-flex align-center">
+        <warehouse-race-select
+          :model-value="raceA"
+          :label="$t('views_warehouse.race')"
+          @update:model-value="(v) => (raceA = v)"
+        />
+        <warehouse-race-select
+          :model-value="raceB"
+          :label="$t('views_warehouse.opponent')"
+          @update:model-value="(v) => (raceB = v)"
+        />
+        <warehouse-map-select
+          :model-value="mapName"
+          :label="$t('views_warehouse.map')"
+          :maps="maps"
+          @update:model-value="(v) => (mapName = v)"
+        />
+        <warehouse-season-select
+          :model-value="seasons"
+          :label="$t('views_warehouse.season')"
+          :seasons="seasonEntries"
+          @update:model-value="(v) => (seasons = v)"
+        />
+        <mmr-select :mmr="mmr" @mmrFilterChanged="(v) => (mmr = v)" />
+        <duration-select :duration="duration" @durationFilterChanged="(v) => (duration = v ?? { min: 0, max: 14400 })" />
+      </div>
+    </div>
 
-        <div class="d-flex flex-wrap ga-3 mt-3">
-          <v-text-field
-            v-model.number="minMinutes"
-            type="number"
-            label="Min minutes"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="max-width: 150px"
-          />
-          <v-text-field
-            v-model.number="maxMinutes"
-            type="number"
-            label="Max minutes"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="max-width: 150px"
-          />
-          <v-text-field
-            v-model.number="minMmr"
-            type="number"
-            label="Min MMR"
-            density="compact"
-            variant="outlined"
-            :hint="mmrHint"
-            persistent-hint
-            style="max-width: 180px"
-          />
-          <v-text-field
-            v-model.number="maxMmr"
-            type="number"
-            label="Max MMR"
-            density="compact"
-            variant="outlined"
-            :hint="mmrHint"
-            persistent-hint
-            style="max-width: 180px"
-          />
-        </div>
-
-        <div class="d-flex flex-wrap align-center ga-3 mt-3">
-          <v-combobox
-            v-model="playerNames"
-            label="Player names"
-            density="compact"
-            variant="outlined"
-            hide-details
-            multiple
-            chips
-            closable-chips
-            clearable
-            style="min-width: 280px"
-          />
-          <v-switch
-            v-model="playersMatchAll"
-            label="Match all players"
-            density="compact"
-            hide-details
-            color="primary"
-          />
-          <v-switch
-            v-model="w3cLinkedOnly"
-            label="w3c-linked only"
-            density="compact"
-            hide-details
-            color="primary"
-          />
-        </div>
-      </v-card-text>
-    </v-card>
+    <div class="d-flex flex-wrap align-center ga-3 mb-4">
+      <warehouse-player-select
+        :model-value="playerNames"
+        :label="$t('views_warehouse.player')"
+        :players="players"
+        @update:model-value="(v) => (playerNames = v)"
+      />
+      <v-switch
+        v-model="playersMatchAll"
+        :label="$t('components_warehouse_search.matchAllPlayers')"
+        density="compact"
+        hide-details
+        color="primary"
+      />
+    </div>
 
     <!-- Sequence groups -->
     <v-card
       v-for="(group, gIdx) in groups"
       :key="gIdx"
       variant="outlined"
-      class="mb-3"
+      class="mb-3 wh-group-card"
     >
       <v-card-title class="d-flex align-center py-2">
-        <span class="text-subtitle-1">Group {{ gIdx + 1 }}</span>
+        <span class="text-subtitle-1">{{ $t("components_warehouse_search.group") }} {{ gIdx + 1 }}</span>
         <v-spacer />
-        <v-btn size="small" variant="text" color="error" @click="removeGroup(gIdx)">Remove</v-btn>
+        <v-btn size="small" variant="text" @click="removeGroup(gIdx)">
+          <v-icon start>{{ mdiClose }}</v-icon>
+          {{ $t("components_warehouse_search.remove") }}
+        </v-btn>
       </v-card-title>
       <v-divider />
       <v-card-text>
-        <div class="d-flex flex-wrap ga-3">
-          <v-select
-            v-model="group.race"
-            :items="races"
-            label="Race (required)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            style="min-width: 200px"
+        <div class="d-flex flex-wrap align-center ga-3">
+          <warehouse-race-select
+            :model-value="group.race"
+            :label="$t('views_warehouse.race')"
+            :allow-any="false"
+            @update:model-value="(v) => (group.race = v ?? 'Human')"
           />
-          <v-select
+          <v-btn-toggle
             v-model="group.result"
-            :items="resultItems"
-            label="Result"
             density="compact"
             variant="outlined"
-            hide-details
-            clearable
-            style="min-width: 160px"
-          />
-          <v-text-field
-            v-model="group.player"
-            label="Player (optional)"
-            density="compact"
-            variant="outlined"
-            hide-details
-            clearable
-            style="min-width: 220px"
-          />
+            divided
+          >
+            <v-btn :value="null" size="small">{{ $t("components_warehouse_search.resultAny") }}</v-btn>
+            <v-btn value="won" size="small" class="w3-won">{{ $t("components_warehouse_search.resultWon") }}</v-btn>
+            <v-btn value="lost" size="small" class="w3-lost">{{ $t("components_warehouse_search.resultLost") }}</v-btn>
+          </v-btn-toggle>
         </div>
 
         <div class="mt-3">
@@ -171,23 +92,23 @@
             :key="sIdx"
             class="step-row d-flex flex-wrap align-center ga-2 mb-2"
           >
-            <span class="text-caption text-medium-emphasis" style="width: 24px">{{ sIdx + 1 }}.</span>
+            <span class="text-caption text-medium-emphasis" style="width: 22px">{{ sIdx + 1 }}.</span>
             <v-select
               v-model="step.event_type"
               :items="eventTypeItems"
-              label="Event"
+              :label="$t('components_warehouse_search.event')"
               density="compact"
               variant="outlined"
               hide-details
-              style="min-width: 160px"
-              @update:model-value="onEventTypeChange(step)"
+              style="min-width: 170px"
+              @update:model-value="() => onEventTypeChange(step)"
             />
             <v-autocomplete
               v-model="step.subject"
               :items="mappingItems(step.event_type)"
               item-title="name"
               item-value="name"
-              label="Subject"
+              :label="$t('components_warehouse_search.subject')"
               density="compact"
               variant="outlined"
               hide-details
@@ -197,13 +118,12 @@
               <template v-slot:item="{ props: itemProps, item }">
                 <v-list-item v-bind="itemProps" :title="item.raw.name">
                   <template v-slot:prepend>
-                    <img
+                    <v-img
                       v-if="item.raw.icon_url"
                       :src="assetUrl(item.raw.icon_url)"
                       width="24"
                       height="24"
                       class="mr-2"
-                      alt=""
                     />
                   </template>
                 </v-list-item>
@@ -213,16 +133,16 @@
               v-if="sIdx > 0"
               v-model.number="step.within_previous_seconds"
               type="number"
-              label="Within prev (s)"
+              :label="$t('components_warehouse_search.withinPrev')"
               density="compact"
               variant="outlined"
               hide-details
-              style="max-width: 150px"
+              style="max-width: 160px"
             />
             <v-text-field
               v-model.number="step.time_from_seconds"
               type="number"
-              label="From (s)"
+              :label="$t('components_warehouse_search.fromSec')"
               density="compact"
               variant="outlined"
               hide-details
@@ -231,13 +151,13 @@
             <v-text-field
               v-model.number="step.time_to_seconds"
               type="number"
-              label="To (s)"
+              :label="$t('components_warehouse_search.toSec')"
               density="compact"
               variant="outlined"
               hide-details
               style="max-width: 130px"
             />
-            <v-btn icon size="x-small" variant="text" color="error" @click="removeStep(group, sIdx)">
+            <v-btn icon size="x-small" variant="text" @click="removeStep(group, sIdx)">
               <v-icon>{{ mdiClose }}</v-icon>
             </v-btn>
           </div>
@@ -248,30 +168,27 @@
             @click="addStep(group)"
           >
             <v-icon start>{{ mdiPlus }}</v-icon>
-            Add step
+            {{ $t("components_warehouse_search.addStep") }}
           </v-btn>
         </div>
       </v-card-text>
     </v-card>
 
     <div class="d-flex align-center ga-3 mb-4">
-      <v-btn
-        v-if="groups.length < 2"
-        variant="outlined"
-        @click="addGroup"
-      >
+      <v-btn v-if="groups.length < 2" variant="text" @click="addGroup">
         <v-icon start>{{ mdiPlus }}</v-icon>
-        Add group
+        {{ $t("components_warehouse_search.addGroup") }}
       </v-btn>
       <v-spacer />
       <v-btn
         color="primary"
-        variant="flat"
+        variant="tonal"
         :loading="loading"
         :disabled="!hasConstraint"
         @click="runSearch"
       >
-        Search
+        <v-icon start>{{ mdiMagnify }}</v-icon>
+        {{ $t("components_warehouse_search.search") }}
       </v-btn>
     </div>
 
@@ -293,35 +210,38 @@
       </v-alert>
 
       <div class="text-caption text-medium-emphasis mb-2">
-        {{ count }} matching {{ count === 1 ? "replay" : "replays" }}
+        {{ $t("components_warehouse_search.matchingReplays", { n: count }) }}
       </div>
 
-      <v-row v-if="replays.length">
-        <v-col v-for="replay in replays" :key="replay.replay_id" cols="12" md="6">
-          <replay-card :replay="replay" />
-        </v-col>
-      </v-row>
-      <div v-else class="text-medium-emphasis py-6 text-center">No replays matched.</div>
+      <warehouse-replays-table :replays="replays" />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import ReplayCard from "@/components/warehouse/ReplayCard.vue";
-import WarehouseService from "@/services/WarehouseService";
-import { warehouseAssetUrl } from "@/services/WarehouseService";
-import { WAREHOUSE_URL } from "@/config/env";
+import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
+import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
+import WarehouseSeasonSelect from "@/components/warehouse/filters/WarehouseSeasonSelect.vue";
+import WarehousePlayerSelect from "@/components/warehouse/filters/WarehousePlayerSelect.vue";
+import MmrSelect from "@/components/common/MmrSelect.vue";
+import DurationSelect from "@/components/common/DurationSelect.vue";
+import WarehouseReplaysTable from "@/components/warehouse/WarehouseReplaysTable.vue";
+import WarehouseService, { warehouseAssetUrl } from "@/services/WarehouseService";
+import type { Mmr } from "@/store/match/types";
 import type {
   EventType,
+  MapEntry,
   MappingEntry,
+  PlayerEntry,
   Race,
   ReplayMetadata,
   SearchRequest,
+  SeasonEntry,
   SequenceGroup,
   SequenceStep,
 } from "@/store/warehouse/types";
-import { mdiClose, mdiPlus } from "@mdi/js";
+import { mdiClose, mdiMagnify, mdiPlus } from "@mdi/js";
 
 interface StepForm {
   event_type: EventType;
@@ -333,43 +253,34 @@ interface StepForm {
 interface GroupForm {
   race: Race;
   result: "won" | "lost" | null;
-  player: string | null;
   steps: StepForm[];
 }
 
-const races: Race[] = ["Human", "Orc", "NightElf", "Undead", "Random"];
-const resultItems = [
-  { title: "Won", value: "won" },
-  { title: "Lost", value: "lost" },
-];
 const eventTypeItems: { title: string; value: EventType }[] = [
   { title: "Building", value: "building" },
   { title: "Unit", value: "unit" },
-  { title: "Item", value: "item" },
   { title: "Upgrade", value: "upgrade" },
+  { title: "Item", value: "item" },
   { title: "Hero skill", value: "hero_skill" },
   { title: "Hero trained", value: "hero_trained" },
 ];
 
 // Scope filter state
-const matchup = ref<Race[]>([]);
+const raceA = ref<Race | null>(null);
+const raceB = ref<Race | null>(null);
 const mapName = ref<string | null>(null);
 const seasons = ref<number[]>([]);
-const minMinutes = ref<number | null>(null);
-const maxMinutes = ref<number | null>(null);
-const minMmr = ref<number | null>(null);
-const maxMmr = ref<number | null>(null);
+const mmr = ref<Mmr>({ min: 0, max: 3000 });
+const duration = ref<{ min: number; max: number }>({ min: 0, max: 14400 });
 const playerNames = ref<string[]>([]);
 const playersMatchAll = ref(false);
-const w3cLinkedOnly = ref(false);
 
 const groups = ref<GroupForm[]>([]);
 
 // Reference data
-const mapNames = ref<string[]>([]);
-const seasonItems = ref<{ title: string; value: number }[]>([]);
-const mmrHint = ref("");
-// Cache of subject mappings per event type (populated on demand).
+const maps = ref<MapEntry[]>([]);
+const seasonEntries = ref<SeasonEntry[]>([]);
+const players = ref<PlayerEntry[]>([]);
 const mappingCache = reactive<Record<string, MappingEntry[]>>({});
 
 // Results
@@ -384,7 +295,6 @@ function assetUrl(path: string): string {
   return warehouseAssetUrl(path);
 }
 
-// v-model.number on an empty field yields "" (not null); only forward real numbers.
 function isNum(v: unknown): v is number {
   return typeof v === "number" && !Number.isNaN(v);
 }
@@ -408,7 +318,7 @@ function onEventTypeChange(step: StepForm): void {
 }
 
 function addGroup(): void {
-  groups.value.push({ race: "Human", result: null, player: null, steps: [] });
+  groups.value.push({ race: "Human", result: null, steps: [] });
 }
 
 function removeGroup(idx: number): void {
@@ -432,51 +342,52 @@ function removeStep(group: GroupForm, idx: number): void {
   group.steps.splice(idx, 1);
 }
 
-// A group contributes a constraint only if it has a step, player, or result
-// (a bare race group is not enough for the backend's empty-request check).
 function groupIsActive(g: GroupForm): boolean {
-  return g.steps.length > 0 || !!g.player?.trim() || !!g.result;
+  return g.steps.length > 0 || !!g.result;
 }
+
+const matchupSelected = computed<Race[]>(() =>
+  [raceA.value, raceB.value].filter((r): r is Race => !!r)
+);
+
+const durationActive = computed<boolean>(() => duration.value.min > 0 || duration.value.max < 14400);
 
 const hasScopeFilter = computed(() =>
   !!mapName.value
-  || isNum(minMinutes.value)
-  || isNum(maxMinutes.value)
-  || isNum(minMmr.value)
-  || isNum(maxMmr.value)
+  || mmr.value.min > 0
+  || mmr.value.max < 3000
+  || durationActive.value
   || playerNames.value.length > 0
   || seasons.value.length > 0
-  || w3cLinkedOnly.value
 );
 
 const hasConstraint = computed(() =>
-  matchup.value.length > 0
+  matchupSelected.value.length > 0
   || hasScopeFilter.value
   || groups.value.some(groupIsActive)
 );
 
 // Build the request, omitting every unset key (backend is extra="forbid").
 function buildRequest(): SearchRequest {
-  const req: SearchRequest = { limit: 100 };
-  if (matchup.value.length) req.matchup = matchup.value.slice(0, 2);
+  const req: SearchRequest = { w3c_linked_only: true, limit: 100 };
+  if (matchupSelected.value.length) req.matchup = matchupSelected.value;
   if (mapName.value) req.map_name = mapName.value;
   if (seasons.value.length) req.seasons = seasons.value;
-  if (isNum(minMinutes.value)) req.min_minutes = minMinutes.value;
-  if (isNum(maxMinutes.value)) req.max_minutes = maxMinutes.value;
-  if (isNum(minMmr.value)) req.min_mmr = minMmr.value;
-  if (isNum(maxMmr.value)) req.max_mmr = maxMmr.value;
+  if (durationActive.value) {
+    if (duration.value.min > 0) req.min_minutes = Math.floor(duration.value.min / 60);
+    if (duration.value.max < 14400) req.max_minutes = Math.floor(duration.value.max / 60);
+  }
+  if (mmr.value.min > 0) req.min_mmr = mmr.value.min;
+  if (mmr.value.max < 3000) req.max_mmr = mmr.value.max;
   if (playerNames.value.length) {
     req.player_names = playerNames.value;
     if (playersMatchAll.value) req.players_match_all = true;
   }
-  if (w3cLinkedOnly.value) req.w3c_linked_only = true;
 
-  // Include any group with a race set; steps-free groups pin an opponent race.
   const built: SequenceGroup[] = [];
   for (const g of groups.value) {
-    if (!g.race) continue;
+    if (!groupIsActive(g)) continue;
     const group: SequenceGroup = { race: g.race };
-    if (g.player?.trim()) group.player = g.player.trim();
     if (g.result) group.result = g.result;
     if (g.steps.length) {
       group.steps = g.steps.map((s, i) => {
@@ -513,23 +424,32 @@ async function runSearch(): Promise<void> {
 }
 
 onMounted(async () => {
-  try {
-    const maps = await WarehouseService.getMaps();
-    mapNames.value = maps.map((m) => m.name);
-  } catch {
-    apiError.value = `Warehouse API not reachable at ${WAREHOUSE_URL} — docker compose up`;
-  }
-  try {
-    const s = await WarehouseService.getSeasons();
-    seasonItems.value = s.map((e) => ({ title: `S${e.season} (${e.replays})`, value: e.season }));
-  } catch {
-    seasonItems.value = [];
-  }
-  try {
-    const mmr = await WarehouseService.getMmrStats();
-    if (mmr.n > 0) mmrHint.value = `p5 ${mmr.p5} / p50 ${mmr.p50} / p95 ${mmr.p95}`;
-  } catch {
-    mmrHint.value = "";
-  }
+  const [mapsRes, seasonsRes, playersRes] = await Promise.allSettled([
+    WarehouseService.getMaps(),
+    WarehouseService.getSeasons(),
+    WarehouseService.getPlayers(),
+  ]);
+  if (mapsRes.status === "fulfilled") maps.value = mapsRes.value;
+  if (seasonsRes.status === "fulfilled") seasonEntries.value = seasonsRes.value;
+  if (playersRes.status === "fulfilled") players.value = playersRes.value;
 });
 </script>
+
+<style lang="scss" scoped>
+.matches-filter-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 8px 8px;
+  margin: -2px -8px -8px;
+}
+
+.matches-filter-row {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.wh-group-card {
+  background-color: transparent;
+}
+</style>

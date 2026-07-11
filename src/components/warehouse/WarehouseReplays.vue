@@ -1,153 +1,130 @@
 <template>
-  <div class="warehouse-replays">
-    <v-alert v-if="apiError" type="error" variant="tonal" class="mb-3">
+  <div>
+    <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-3">
       {{ apiError }}
     </v-alert>
 
-    <div v-if="health" class="text-caption text-medium-emphasis mb-2">
-      {{ health.replays.toLocaleString() }} replays &middot;
-      {{ health.w3c_replays.toLocaleString() }} w3c-linked &middot;
-      duration {{ health.duration_minutes.min }}&ndash;{{ health.duration_minutes.max }} min
+    <div class="matches-filter-scroll mb-2">
+      <div class="matches-filter-row d-flex align-center">
+        <warehouse-race-select
+          :model-value="raceA"
+          :label="$t('views_warehouse.race')"
+          @update:model-value="onRaceA"
+        />
+        <warehouse-race-select
+          :model-value="raceB"
+          :label="$t('views_warehouse.opponent')"
+          @update:model-value="onRaceB"
+        />
+        <warehouse-map-select
+          :model-value="mapName"
+          :label="$t('views_warehouse.map')"
+          :maps="maps"
+          @update:model-value="onMap"
+        />
+        <warehouse-player-select
+          :model-value="playerNames"
+          :label="$t('views_warehouse.player')"
+          :players="players"
+          @update:model-value="onPlayers"
+        />
+        <mmr-select :mmr="mmr" @mmrFilterChanged="onMmr" />
+        <warehouse-season-select
+          :model-value="seasons"
+          :label="$t('views_warehouse.season')"
+          :seasons="seasonEntries"
+          @update:model-value="onSeasons"
+        />
+      </div>
     </div>
 
-    <!-- Filter row: any value here switches from GET /v1/replays to POST /v1/browse. -->
-    <div class="filter-row d-flex align-center flex-wrap ga-3 mb-3">
-      <v-text-field
-        v-model="playerName"
-        label="Player name"
-        density="compact"
-        variant="outlined"
-        hide-details
-        clearable
-        style="max-width: 240px"
-        @keyup.enter="applyFilters"
-      />
-      <v-select
-        v-model="mapName"
-        :items="mapNames"
-        label="Map"
-        density="compact"
-        variant="outlined"
-        hide-details
-        clearable
-        style="max-width: 260px"
-      />
-      <v-select
-        v-model="matchup"
-        :items="races"
-        label="Matchup (up to 2)"
-        density="compact"
-        variant="outlined"
-        hide-details
-        clearable
-        multiple
-        chips
-        closable-chips
-        style="max-width: 280px"
-        :error="matchup.length > 2"
-      />
-      <v-btn color="primary" variant="flat" :loading="loading" @click="applyFilters">Apply</v-btn>
-      <v-btn v-if="filtered" variant="text" @click="clearFilters">Clear</v-btn>
-    </div>
-
-    <div v-if="loading && replays.length === 0" class="d-flex justify-center py-10">
+    <div v-if="loading" class="d-flex justify-center py-10">
       <v-progress-circular indeterminate color="primary" size="40" />
     </div>
 
     <template v-else>
-      <div v-if="filtered && count != null" class="text-caption text-medium-emphasis mb-2">
-        {{ count }} matching {{ count === 1 ? "replay" : "replays" }}
-      </div>
+      <warehouse-replays-table :replays="pageReplays" />
 
-      <v-row v-if="replays.length">
-        <v-col v-for="replay in replays" :key="replay.replay_id" cols="12" md="6">
-          <replay-card :replay="replay" />
-        </v-col>
-      </v-row>
-
-      <div v-else-if="!apiError" class="text-medium-emphasis py-6 text-center">
-        No replays found.
+      <div v-if="total" class="text-center font-regular mt-2">
+        {{ lowRange }} - {{ highRange }} {{ $t("views_warehouse.of") }} {{ total }}
       </div>
-
-      <!-- Load-more only pages the unfiltered GET /v1/replays list. -->
-      <div v-if="!filtered && canLoadMore" class="d-flex justify-center py-4">
-        <v-btn variant="outlined" :loading="loading" @click="loadMore">Load more</v-btn>
-      </div>
+      <v-pagination
+        v-if="totalPages > 1"
+        v-model="page"
+        :length="totalPages"
+        total-visible="8"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import ReplayCard from "@/components/warehouse/ReplayCard.vue";
+import { computed, onMounted, ref, watch } from "vue";
+import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
+import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
+import WarehouseSeasonSelect from "@/components/warehouse/filters/WarehouseSeasonSelect.vue";
+import WarehousePlayerSelect from "@/components/warehouse/filters/WarehousePlayerSelect.vue";
+import MmrSelect from "@/components/common/MmrSelect.vue";
+import WarehouseReplaysTable from "@/components/warehouse/WarehouseReplaysTable.vue";
 import WarehouseService from "@/services/WarehouseService";
-import { WAREHOUSE_URL } from "@/config/env";
-import type { Race, ReplayMetadata, SearchRequest, WarehouseHealth } from "@/store/warehouse/types";
+import type { Mmr } from "@/store/match/types";
+import type {
+  MapEntry,
+  PlayerEntry,
+  Race,
+  ReplayMetadata,
+  SearchRequest,
+  SeasonEntry,
+} from "@/store/warehouse/types";
 
-const PAGE = 50;
-const races: Race[] = ["Human", "Orc", "NightElf", "Undead", "Random"];
+const PAGE_SIZE = 50;
+// browse caps at 1000; 200 is plenty for the w3c-linked corpus and keeps paging client-side.
+// ponytail: switch to server offset paging when the corpus outgrows this.
+const FETCH_LIMIT = 200;
+
+const maps = ref<MapEntry[]>([]);
+const seasonEntries = ref<SeasonEntry[]>([]);
+const players = ref<PlayerEntry[]>([]);
+
+const raceA = ref<Race | null>(null);
+const raceB = ref<Race | null>(null);
+const mapName = ref<string | null>(null);
+const playerNames = ref<string[]>([]);
+const mmr = ref<Mmr>({ min: 0, max: 3000 });
+const seasons = ref<number[]>([]);
 
 const replays = ref<ReplayMetadata[]>([]);
-const health = ref<WarehouseHealth | null>(null);
-const mapNames = ref<string[]>([]);
 const loading = ref(false);
 const apiError = ref("");
-const offset = ref(0);
-const canLoadMore = ref(false);
-const count = ref<number | null>(null);
+const page = ref(1);
 
-const playerName = ref("");
-const mapName = ref<string | null>(null);
-const matchup = ref<Race[]>([]);
-const filtered = ref(false);
+const total = computed<number>(() => replays.value.length);
+const totalPages = computed<number>(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
+const pageReplays = computed<ReplayMetadata[]>(() =>
+  replays.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE)
+);
+const lowRange = computed<number>(() => (total.value === 0 ? 0 : (page.value - 1) * PAGE_SIZE + 1));
+const highRange = computed<number>(() => Math.min(page.value * PAGE_SIZE, total.value));
 
-function unreachable(): string {
-  return `Warehouse API not reachable at ${WAREHOUSE_URL} — docker compose up`;
-}
-
-async function loadHeaderData(): Promise<void> {
-  try {
-    health.value = await WarehouseService.getHealth();
-  } catch {
-    // health strip is best-effort; the list load surfaces the real error
-  }
-  try {
-    const maps = await WarehouseService.getMaps();
-    mapNames.value = maps.map((m) => m.name);
-  } catch {
-    mapNames.value = [];
-  }
-}
-
-async function loadReplays(reset: boolean): Promise<void> {
-  loading.value = true;
-  apiError.value = "";
-  try {
-    if (reset) offset.value = 0;
-    const page = await WarehouseService.getReplays(PAGE, offset.value);
-    replays.value = reset ? page : [...replays.value, ...page];
-    canLoadMore.value = page.length === PAGE;
-    offset.value += page.length;
-  } catch (e) {
-    apiError.value = e instanceof Error ? `${unreachable()} (${e.message})` : unreachable();
-    if (reset) replays.value = [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function runBrowse(): Promise<void> {
-  loading.value = true;
-  apiError.value = "";
-  const req: SearchRequest = { limit: 100 };
-  if (playerName.value.trim()) req.player_names = [playerName.value.trim()];
+function buildRequest(): SearchRequest {
+  const req: SearchRequest = { w3c_linked_only: true, limit: FETCH_LIMIT };
+  const matchup = [raceA.value, raceB.value].filter((r): r is Race => !!r);
+  if (matchup.length) req.matchup = matchup;
   if (mapName.value) req.map_name = mapName.value;
-  if (matchup.value.length) req.matchup = matchup.value.slice(0, 2);
+  if (playerNames.value.length) req.player_names = playerNames.value;
+  if (mmr.value.min > 0) req.min_mmr = mmr.value.min;
+  if (mmr.value.max < 3000) req.max_mmr = mmr.value.max;
+  if (seasons.value.length) req.seasons = seasons.value;
+  return req;
+}
+
+async function load(): Promise<void> {
+  loading.value = true;
+  apiError.value = "";
   try {
-    const res = await WarehouseService.browse(req);
+    const res = await WarehouseService.browse(buildRequest());
     replays.value = res.replays;
-    count.value = res.count;
-    canLoadMore.value = false;
+    page.value = 1;
   } catch (e) {
     apiError.value = e instanceof Error ? e.message : "Browse failed";
     replays.value = [];
@@ -156,33 +133,56 @@ async function runBrowse(): Promise<void> {
   }
 }
 
-function hasFilters(): boolean {
-  return !!playerName.value.trim() || !!mapName.value || matchup.value.length > 0;
+function onRaceA(v: Race | null): void {
+  raceA.value = v;
+}
+function onRaceB(v: Race | null): void {
+  raceB.value = v;
+}
+function onMap(v: string | null): void {
+  mapName.value = v;
+}
+function onPlayers(v: string[]): void {
+  playerNames.value = v;
+}
+function onMmr(v: Mmr): void {
+  mmr.value = v;
+}
+function onSeasons(v: number[]): void {
+  seasons.value = v;
 }
 
-function applyFilters(): void {
-  if (hasFilters()) {
-    filtered.value = true;
-    runBrowse();
-  } else {
-    clearFilters();
-  }
-}
+// Re-run browse whenever any filter changes.
+watch([raceA, raceB, mapName, playerNames, mmr, seasons], load, { deep: true });
 
-function clearFilters(): void {
-  playerName.value = "";
-  mapName.value = null;
-  matchup.value = [];
-  filtered.value = false;
-  count.value = null;
-  loadReplays(true);
-}
-
-function loadMore(): void {
-  loadReplays(false);
+async function loadReference(): Promise<void> {
+  const [mapsRes, seasonsRes, playersRes] = await Promise.allSettled([
+    WarehouseService.getMaps(),
+    WarehouseService.getSeasons(),
+    WarehouseService.getPlayers(),
+  ]);
+  if (mapsRes.status === "fulfilled") maps.value = mapsRes.value;
+  if (seasonsRes.status === "fulfilled") seasonEntries.value = seasonsRes.value;
+  if (playersRes.status === "fulfilled") players.value = playersRes.value;
 }
 
 onMounted(async () => {
-  await Promise.all([loadHeaderData(), loadReplays(true)]);
+  await loadReference();
+  await load();
 });
 </script>
+
+<style lang="scss" scoped>
+.matches-filter-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 8px 8px;
+  margin: -2px -8px -8px;
+}
+
+.matches-filter-row {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
+}
+</style>

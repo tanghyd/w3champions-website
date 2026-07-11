@@ -121,3 +121,92 @@ export interface WarehouseHealth {
   w3c_replays: number;
   duration_minutes: { min: number; max: number };
 }
+
+// GET /v1/players
+export interface PlayerEntry {
+  name: string;
+  replays: number;
+}
+
+// GET /v1/stats
+export interface MatchupStat {
+  race_a: string;
+  race_b: string;
+  games: number;
+  pct_a: number; // winrate % of race_a in that pairing (decided games)
+}
+
+export interface HeroPickrate {
+  race: string;
+  hero: string;
+  picks: number;
+  pct: number;
+}
+
+export interface HeroPickrateGroup {
+  race: string;
+  heroes: HeroPickrate[];
+}
+
+export interface HistogramBucket {
+  bucket: string;
+  n: number;
+  pct: number; // bar height scaled to the max bucket, NOT a probability
+}
+
+export interface WarehouseStats {
+  matchups: MatchupStat[];
+  hero_pickrates: HeroPickrateGroup[];
+  durations: HistogramBucket[];
+  apm: HistogramBucket[];
+  mmr: HistogramBucket[];
+}
+
+// GET /v1/openers
+export interface OpenerChild {
+  prefix: string[];
+  depth: number;
+  matches: number;
+  wins: number;
+  avg_duration_min: number;
+  branch_factor: number;
+  sample_replays: string[];
+}
+
+export interface OpenerCode {
+  name: string;
+  icon_url: string | null;
+}
+
+export interface OpenersResponse {
+  totals: { matches: number };
+  children: OpenerChild[];
+  codes: Record<string, OpenerCode>;
+}
+
+export interface OpenersParams {
+  race: Race; // required, full name
+  opponent_race?: Race;
+  map_name?: string;
+  sort?: "popular" | "winrate";
+  prefix?: string[]; // sent as csv
+  min_mmr?: number;
+  max_mmr?: number;
+  players?: string[]; // sent as csv
+}
+
+// POST /v1/openers/replays
+export interface OpenerReplaysRequest {
+  race: Race;
+  opponent_race?: Race;
+  map_name?: string;
+  prefix: string[];
+  min_mmr?: number;
+  max_mmr?: number;
+  players?: string[];
+}
+
+export interface OpenerReplaysResponse {
+  count: number;
+  replays: ReplayMetadata[]; // <= 50
+}

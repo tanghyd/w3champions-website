@@ -1,75 +1,85 @@
 <template>
   <v-container class="pa-3 w3-container-width">
-    <v-card tile>
-      <v-card-title class="pt-3 d-flex align-center">
-        {{ $t("views_app.warehouse") }}
-        <v-spacer />
-        <v-btn
-          size="small"
-          variant="text"
-          :href="activeUrl"
-          target="_blank"
-          rel="noopener"
-        >
-          Open in new tab
-        </v-btn>
-      </v-card-title>
+    <v-row>
+      <v-col cols="12">
+        <v-card tile>
+          <v-card-title class="pt-3 d-flex align-center flex-wrap">
+            <span>{{ $t("views_app.warehouse") }}</span>
+            <v-chip
+              v-if="health"
+              size="small"
+              variant="tonal"
+              color="primary"
+              class="ml-3"
+            >
+              {{ $t("views_warehouse.replayCount", { n: health.w3c_replays }) }}
+            </v-chip>
+          </v-card-title>
 
-      <v-tabs v-model="tab">
-        <v-tab v-for="s in sections" :key="s.path" :value="s.path">{{ s.label }}</v-tab>
-      </v-tabs>
+          <v-tabs>
+            <v-tab exact :to="{ name: EWarehouseRouteName.REPLAYS }">
+              {{ $t("views_warehouse.replays") }}
+            </v-tab>
+            <v-tab :to="{ name: EWarehouseRouteName.SEARCH }">
+              {{ $t("views_warehouse.search") }}
+            </v-tab>
+            <v-tab :to="{ name: EWarehouseRouteName.OPENERS }">
+              {{ $t("views_warehouse.openers") }}
+            </v-tab>
+            <v-tab :to="{ name: EWarehouseRouteName.STATS }">
+              {{ $t("views_warehouse.stats") }}
+            </v-tab>
+          </v-tabs>
 
-      <v-card-subtitle class="py-2">
-        The w3warehouse replay-event dashboard. Requires the stack running at
-        <code>{{ baseUrl }}</code> (<code>docker compose up</code> in the w3warehouse repo).
-      </v-card-subtitle>
-
-      <v-card-text>
-        <warehouse-replays v-if="tab === '/'" />
-        <warehouse-search v-else-if="tab === '/search'" />
-        <!-- ponytail: Openers and Stats have no /v1 JSON endpoints yet, so they stay iframed. -->
-        <iframe
-          v-else
-          :src="activeUrl"
-          class="warehouse-frame"
-          title="w3warehouse dashboard"
-        ></iframe>
-      </v-card-text>
-    </v-card>
+          <v-card-text>
+            <v-alert
+              v-if="offline"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mb-4"
+            >
+              {{ $t("views_warehouse.offline") }}
+            </v-alert>
+            <router-view />
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
   </v-container>
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, ref } from "vue";
-import { WAREHOUSE_URL } from "@/config/env";
-import WarehouseReplays from "@/components/warehouse/WarehouseReplays.vue";
-import WarehouseSearch from "@/components/warehouse/WarehouseSearch.vue";
+import { defineComponent, onMounted, ref } from "vue";
+import WarehouseService from "@/services/WarehouseService";
+import type { WarehouseHealth } from "@/store/warehouse/types";
+import { EWarehouseRouteName } from "@/router/types";
 
 export default defineComponent({
   name: "WarehouseView",
-  components: { WarehouseReplays, WarehouseSearch },
   setup() {
-    const baseUrl = WAREHOUSE_URL.replace(/\/$/, "");
-    const sections = [
-      { label: "Replays", path: "/" },
-      { label: "Search", path: "/search" },
-      { label: "Openers", path: "/openers" },
-      { label: "Stats", path: "/stats" },
-    ];
-    const tab = ref(sections[0].path);
-    // Native tabs link to the dashboard's equivalent page; iframe tabs to themselves.
-    const activeUrl = computed(() => baseUrl + tab.value);
-    return { baseUrl, sections, tab, activeUrl };
+    const health = ref<WarehouseHealth | null>(null);
+    const offline = ref(false);
+
+    onMounted(async () => {
+      try {
+        health.value = await WarehouseService.getHealth();
+      } catch {
+        offline.value = true;
+      }
+    });
+
+    return {
+      health,
+      offline,
+      EWarehouseRouteName,
+    };
   },
 });
 </script>
 
-<style scoped>
-.warehouse-frame {
-  width: 100%;
-  height: calc(100vh - 260px);
-  min-height: 480px;
-  border: 0;
-  display: block;
+<style lang="scss" scoped>
+:deep(.v-tabs .v-slide-group__content) {
+  border-bottom: 1px solid #cdcdcd;
 }
 </style>

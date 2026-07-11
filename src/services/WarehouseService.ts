@@ -1,5 +1,5 @@
 import { WAREHOUSE_URL } from "@/config/env";
-import type { EventType, MapEntry, MappingEntry, MmrStats, ReplayMetadata, SearchRequest, SearchResponse, SeasonEntry, WarehouseHealth } from "@/store/warehouse/types";
+import type { EventType, MapEntry, MappingEntry, MmrStats, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, ReplayMetadata, SearchRequest, SearchResponse, SeasonEntry, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
 
 // WAREHOUSE_URL may carry a trailing slash; the API lives under <base>/v1.
 const BASE = WAREHOUSE_URL.replace(/\/$/, "");
@@ -87,5 +87,30 @@ export default class WarehouseService {
 
   public static getHealth(): Promise<WarehouseHealth> {
     return getJson<WarehouseHealth>("/health");
+  }
+
+  public static getPlayers(): Promise<PlayerEntry[]> {
+    return getJson<PlayerEntry[]>("/players");
+  }
+
+  public static getStats(): Promise<WarehouseStats> {
+    return getJson<WarehouseStats>("/stats");
+  }
+
+  public static getOpeners(params: OpenersParams): Promise<OpenersResponse> {
+    const q = new URLSearchParams();
+    q.set("race", params.race);
+    if (params.opponent_race) q.set("opponent_race", params.opponent_race);
+    if (params.map_name) q.set("map_name", params.map_name);
+    if (params.sort) q.set("sort", params.sort);
+    if (params.prefix && params.prefix.length) q.set("prefix", params.prefix.join(","));
+    if (params.min_mmr != null) q.set("min_mmr", String(params.min_mmr));
+    if (params.max_mmr != null) q.set("max_mmr", String(params.max_mmr));
+    if (params.players && params.players.length) q.set("players", params.players.join(","));
+    return getJson<OpenersResponse>(`/openers?${q.toString()}`);
+  }
+
+  public static getOpenerReplays(body: OpenerReplaysRequest): Promise<OpenerReplaysResponse> {
+    return postJson<OpenerReplaysResponse>("/openers/replays", body);
   }
 }
