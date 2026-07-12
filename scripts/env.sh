@@ -9,4 +9,5 @@ echo "  LAUNCHER_UPDATE_URL: \"${3}\","  >> ./env.js
 echo "  INGAME_STATIC_RESOURCES_URL: \"${4}\","  >> ./env.js
 echo "  BNET_API_CLIENT_ID: \"${5}\","  >> ./env.js
 echo "  TURNSTILE_SITE_KEY: \"${6}\","  >> ./env.js
+echo "  WAREHOUSE_URL: \"${WAREHOUSE_URL}\","  >> ./env.js
 echo "};" >> ./env.js
