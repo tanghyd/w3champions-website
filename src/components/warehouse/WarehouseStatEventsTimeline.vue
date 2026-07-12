@@ -101,7 +101,7 @@ const { detail, slotColor } = defineProps<{
 
 const { t } = useI18n();
 
-type Layer = "heroes" | "skills" | "tech" | "research" | "items" | "itemswaps" | "cancels" | "herokills";
+type Layer = "heroes" | "skills" | "tech" | "research" | "items" | "itemswaps" | "cancels" | "herokills" | "denies";
 const activeLayers = ref<Layer[]>(["tech", "heroes", "herokills"]);
 
 const layerOptions: { value: Layer; title: string }[] = [
@@ -113,6 +113,7 @@ const layerOptions: { value: Layer; title: string }[] = [
   { value: "itemswaps", title: t("components_warehouse_statevents.catItemSwaps") },
   { value: "cancels", title: t("components_warehouse_statevents.catCancels") },
   { value: "herokills", title: t("components_warehouse_statevents.catHeroKills") },
+  { value: "denies", title: t("components_warehouse_statevents.catDenies") },
 ];
 
 // Canonical layer order regardless of toggle order.
@@ -275,6 +276,21 @@ function markersFor(layer: Layer): Record<number, RawMarker[]> {
       if (!r.is_hero) continue;
       const by = r.killer_name ? ` — ${t("components_warehouse_statevents.killedBy").toLowerCase()} ${r.killer_name}${r.killer ? ` (${r.killer})` : ""}` : "";
       push(r.victim_slot, { ...mk(r.game_time_s, r.clock, r.type_code, r.name), bad: true, title: `${r.clock} — ${r.name}${by}` });
+    }
+  }
+  if (layer === "denies") {
+    // Own-side kills on the denier's lane; the badge carries the running
+    // total of XP the opponent never got.
+    const totals = new Map<number, number>();
+    for (const r of [...detail.deaths].sort((a, b) => a.game_time_s - b.game_time_s)) {
+      if (!r.is_deny) continue;
+      const total = (totals.get(r.victim_slot) ?? 0) + r.xp_value;
+      totals.set(r.victim_slot, total);
+      push(r.victim_slot, {
+        ...mk(r.game_time_s, r.clock, r.type_code, r.name),
+        badge: String(total),
+        title: `${r.clock} — ${t("components_warehouse_statevents.denied", { unit: r.name, xp: r.xp_value, total })}`,
+      });
     }
   }
 

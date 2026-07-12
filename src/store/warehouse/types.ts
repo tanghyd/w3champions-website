@@ -250,6 +250,10 @@ export interface StatEventsDeathRow {
   killer_slot: number;
   killer: string; // resolved player name ('' when environment/unknown)
   killer_name: string; // the killing unit
+  level: number;
+  point_value: number;
+  is_deny: boolean | number; // killed by its own side — granted the opponent no XP
+  xp_value: number; // kill XP the unit would have granted (0 for structures/heroes)
   [k: string]: unknown;
 }
 
@@ -258,6 +262,8 @@ export interface StatEventsKdRow {
   name: string;
   kills: number;
   deaths: number;
+  denies: number;
+  xp_denied: number;
 }
 
 export interface StatEventsDamageRow {

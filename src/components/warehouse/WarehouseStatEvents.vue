@@ -222,7 +222,12 @@
                       <race-icon :key="slotRace(row.slot)" :race="raceEnum(slotRace(row.slot))" />
                       {{ row.name }}
                     </td>
-                    <td class="text-end number-text">{{ row.kills }} / {{ row.deaths }}</td>
+                    <td class="text-end number-text">
+                      {{ row.kills }} / {{ row.deaths }}
+                      <div v-if="row.denies" class="text-caption text-medium-emphasis">
+                        {{ $t("components_warehouse_statevents.xpDenied", { count: row.denies, xp: row.xp_denied }) }}
+                      </div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
