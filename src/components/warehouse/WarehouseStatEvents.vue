@@ -17,13 +17,17 @@
         {{ $t("components_warehouse_statevents.scopeNote") }}
       </div>
 
-      <!-- Replay index -->
+      <!-- Replay index, styled like the site's match-history rows -->
       <div class="elevation-1 overflow-x-auto overflow-y-hidden mb-4">
         <table class="custom-table">
           <thead>
             <tr>
-              <td class="text-medium-emphasis">{{ $t("components_warehouse_statevents.players") }}</td>
+              <td class="text-medium-emphasis text-center" style="min-width: 280px">
+                {{ $t("components_warehouse_statevents.players") }}
+              </td>
+              <td class="text-medium-emphasis text-center">{{ $t("components_warehouse_table.map") }}</td>
               <td class="text-medium-emphasis text-end">{{ $t("components_warehouse_statevents.duration") }}</td>
+              <td class="text-medium-emphasis text-end">{{ $t("components_warehouse_table.played") }}</td>
               <td class="text-medium-emphasis text-end">{{ $t("components_warehouse_statevents.events") }}</td>
               <td class="text-medium-emphasis text-end">{{ $t("components_warehouse_statevents.cancels") }}</td>
             </tr>
@@ -37,13 +41,45 @@
               @click="select(r.replay_id)"
             >
               <td>
-                <span v-for="p in r.players" :key="p.slot" class="mr-3 text-no-wrap">
-                  <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
-                  <race-icon :key="p.race" :race="raceEnum(p.race)" />
-                  {{ p.name }}
-                </span>
+                <div v-if="teamsOf(r).length === 2" class="d-flex align-center justify-center wh-se-nowrap py-2">
+                  <div class="wh-se-team wh-se-team--left">
+                    <div v-for="p in teamsOf(r)[0]" :key="p.slot" class="wh-se-player">
+                      <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+                      <span class="wh-se-name">{{ p.name }}</span>
+                      <player-icon :key="p.race" :race="raceEnum(p.race)" />
+                    </div>
+                  </div>
+                  <span class="wh-se-vs text-no-wrap px-2">{{ $t("views_matchdetail.vs") }}</span>
+                  <div class="wh-se-team">
+                    <div v-for="p in teamsOf(r)[1]" :key="p.slot" class="wh-se-player">
+                      <player-icon :key="p.race" :race="raceEnum(p.race)" :left="true" />
+                      <span class="wh-se-name">{{ p.name }}</span>
+                      <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+                    </div>
+                  </div>
+                </div>
+                <template v-else>
+                  <span v-for="p in r.players" :key="p.slot" class="mr-3 text-no-wrap">
+                    <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+                    <race-icon :key="p.race" :race="raceEnum(p.race)" />
+                    {{ p.name }}
+                  </span>
+                </template>
               </td>
-              <td class="text-end number-text">{{ clock(r.duration_s) }}</td>
+              <td class="text-center">
+                <span v-if="r.map" class="text-caption">{{ r.map }}</span>
+                <span v-else class="text-disabled">&mdash;</span>
+              </td>
+              <td class="text-end">
+                <div class="d-flex flex-column text-right align-end">
+                  <span class="number-text">{{ clock(r.duration_s) }}</span>
+                  <div class="wh-se-duration-bar" :style="{ width: durationBarWidth(r) }"></div>
+                </div>
+              </td>
+              <td class="text-end">
+                <span v-if="r.played_at" class="number-text" :title="playedAtTooltip(r)">{{ playedAt(r) }}</span>
+                <span v-else class="text-disabled">&mdash;</span>
+              </td>
               <td class="text-end number-text">{{ r.events.toLocaleString() }}</td>
               <td class="text-end number-text">{{ r.cancels ?? 0 }}</td>
             </tr>
@@ -56,34 +92,55 @@
       </div>
 
       <template v-else-if="detail">
-        <!-- Game summary -->
-        <div class="d-flex align-center flex-wrap ga-3 mb-4">
-          <template v-for="(team, ti) in teams" :key="ti">
-            <span v-if="ti > 0" class="text-medium-emphasis">{{ $t("views_matchdetail.vs") }}</span>
-            <span v-for="p in team" :key="p.slot" class="text-subtitle-2 text-no-wrap">
+        <!-- Match header, echoing the native match-detail page -->
+        <div class="wh-se-header mb-2">
+          <div v-if="teams.length === 2" class="wh-se-ovo">
+            <div class="wh-se-side wh-se-side--left">
+              <div v-for="p in teams[0]" :key="p.slot" class="wh-se-side-player">
+                <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+                <span class="wh-se-bigname font-friz-medium">{{ p.name }}</span>
+                <player-icon :key="p.race" :race="raceEnum(p.race)" :big="true" />
+              </div>
+            </div>
+            <div class="wh-se-ovo-vs font-friz-medium">{{ $t("views_matchdetail.vs") }}</div>
+            <div class="wh-se-side">
+              <div v-for="p in teams[1]" :key="p.slot" class="wh-se-side-player">
+                <player-icon :key="p.race" :race="raceEnum(p.race)" :big="true" :left="true" />
+                <span class="wh-se-bigname font-friz-medium">{{ p.name }}</span>
+                <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="d-flex align-center justify-center flex-wrap ga-3">
+            <span v-for="p in detail.replay.players" :key="p.slot" class="text-subtitle-2 text-no-wrap">
               <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
               <race-icon :key="p.race" :race="raceEnum(p.race)" />
               {{ p.name }}
             </span>
-          </template>
-          <v-chip size="small" variant="tonal">{{ detail.duration_clock }}</v-chip>
-          <v-chip size="small" variant="tonal" :color="detail.qa_ok ? 'success' : 'error'">
-            {{ detail.qa_ok
-              ? $t("components_warehouse_statevents.qaOk")
-              : $t("components_warehouse_statevents.qaGaps") }}
-          </v-chip>
+          </div>
+          <div class="wh-se-mapline text-center text-medium-emphasis">
+            <span v-if="detail.replay.map">{{ detail.replay.map }} ({{ detail.duration_clock }})</span>
+            <span v-else>{{ detail.duration_clock }}</span>
+            <template v-if="detail.replay.played_at"> | {{ playedAtLong(detail.replay.played_at) }}</template>
+          </div>
+          <div class="d-flex justify-center ga-2 mt-1">
+            <v-chip size="small" variant="tonal" :color="detail.qa_ok ? 'success' : 'error'">
+              {{ detail.qa_ok
+                ? $t("components_warehouse_statevents.qaOk")
+                : $t("components_warehouse_statevents.qaGaps") }}
+            </v-chip>
+          </div>
         </div>
 
-        <!-- Match overview -->
-        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.overview") }}</div>
+        <!-- Mirrored team totals, flowing straight under the header like the match page -->
         <warehouse-stat-events-overview :detail="detail" />
 
         <!-- Timeline -->
-        <div class="text-h6 mb-1">{{ $t("components_warehouse_statevents.timeline") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.timeline") }}</div>
         <warehouse-stat-events-timeline :detail="detail" :slot-color="slotColor" class="mb-4" />
 
         <!-- Build orders -->
-        <div class="text-h6 mb-1">{{ $t("components_warehouse_statevents.buildOrders") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.buildOrders") }}</div>
         <div class="d-flex align-center flex-wrap ga-2 mb-2">
           <warehouse-option-select
             :model-value="phaseFilter"
@@ -137,7 +194,7 @@
         </v-row>
 
         <!-- Economy -->
-        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.economy") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.economy") }}</div>
         <v-row class="mb-2">
           <v-col v-for="series in econSeries" :key="series.key" cols="12" md="4">
             <div class="text-subtitle-2 mb-1">{{ series.label }}</div>
@@ -147,12 +204,12 @@
 
         <!-- Map activity -->
         <template v-if="detail.minimap">
-          <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.mapActivity") }}</div>
+          <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.mapActivity") }}</div>
           <warehouse-stat-events-minimap :detail="detail" :slot-color="slotColor" class="mb-4" />
         </template>
 
         <!-- Combat: K/D, kills by unit, damage pairs -->
-        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.combat") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.combat") }}</div>
         <v-row class="mb-2">
           <v-col cols="12" md="4">
             <div class="text-subtitle-2 mb-1">{{ $t("components_warehouse_statevents.kd") }}</div>
@@ -209,7 +266,7 @@
         </v-row>
 
         <!-- Heroes -->
-        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.heroes") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.heroes") }}</div>
         <v-row class="mb-2">
           <v-col v-for="slot in playerSlots" :key="slot" cols="12" md="6">
             <div class="text-subtitle-2 mb-1">
@@ -244,7 +301,7 @@
         </v-row>
 
         <!-- Losses -->
-        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.losses") }}</div>
+        <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.losses") }}</div>
         <div class="elevation-1 overflow-y-auto wh-se-losses mb-2">
           <table class="custom-table">
             <thead>
@@ -305,15 +362,21 @@ import WarehouseEntityIcon from "@/components/warehouse/WarehouseEntityIcon.vue"
 import WarehouseStatEventsMinimap from "@/components/warehouse/WarehouseStatEventsMinimap.vue";
 import WarehouseStatEventsOverview from "@/components/warehouse/WarehouseStatEventsOverview.vue";
 import WarehouseStatEventsTimeline from "@/components/warehouse/WarehouseStatEventsTimeline.vue";
+import PlayerIcon from "@/components/matches/PlayerIcon.vue";
 import RaceIcon from "@/components/player/RaceIcon.vue";
 import { ERaceEnum } from "@/store/types";
 import { raceToEnum } from "@/components/warehouse/warehouse-helpers";
 import WarehouseOptionSelect from "@/components/warehouse/filters/WarehouseOptionSelect.vue";
 import { ensureIconIndex } from "@/components/warehouse/warehouse-icons";
+import {
+  formatTimestampStringToDate,
+  formatTimestampStringToDateTime,
+} from "@/helpers/date-functions";
 import type {
   StatEventsBuildRow,
   StatEventsDetail,
   StatEventsHeroRow,
+  StatEventsPlayer,
   StatEventsReplay,
 } from "@/store/warehouse/types";
 import type { ChartData, ChartOptions } from "chart.js";
@@ -360,20 +423,41 @@ function clock(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Bar scaled against the longest game currently shown (min 5% so short games read).
+const maxDurationS = computed<number>(() => replays.value.reduce((max, r) => Math.max(max, r.duration_s), 1));
+
+function durationBarWidth(r: StatEventsReplay): string {
+  const pct = (r.duration_s / maxDurationS.value) * 100;
+  return `${Math.max(5, Math.min(100, pct))}%`;
+}
+
+function playedAt(r: StatEventsReplay): string {
+  return r.played_at ? formatTimestampStringToDate(r.played_at) : "";
+}
+
+function playedAtTooltip(r: StatEventsReplay): string {
+  return r.played_at ? formatTimestampStringToDateTime(r.played_at) : "";
+}
+
+function playedAtLong(playedAtIso: string): string {
+  return formatTimestampStringToDateTime(playedAtIso);
+}
+
+function groupByTeam(players: StatEventsPlayer[]): StatEventsPlayer[][] {
+  const byTeam = new Map<number, StatEventsPlayer[]>();
+  for (const p of players) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p]);
+  return [...byTeam.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g);
+}
+
+function teamsOf(r: StatEventsReplay): StatEventsPlayer[][] {
+  return groupByTeam(r.players ?? []);
+}
+
 const playerSlots = computed<number[]>(() =>
   (detail.value?.replay.players ?? []).map((p) => p.slot)
 );
 
-const teams = computed(() => {
-  const players = detail.value?.replay.players ?? [];
-  const byTeam = new Map<number, typeof players>();
-  for (const p of players) {
-    const group = byTeam.get(p.team) ?? [];
-    group.push(p);
-    byTeam.set(p.team, group);
-  }
-  return [...byTeam.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g);
-});
+const teams = computed<StatEventsPlayer[][]>(() => groupByTeam(detail.value?.replay.players ?? []));
 
 function slotRace(slot: number): string {
   return detail.value?.replay.players.find((p) => p.slot === slot)?.race ?? "";
@@ -492,6 +576,119 @@ onMounted(async () => {
   background: rgba(128, 128, 128, 0.12);
 }
 
+.wh-se-nowrap {
+  flex-wrap: nowrap !important;
+}
+
+.wh-se-team {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 0;
+  min-width: 0;
+
+  &--left {
+    align-items: flex-end;
+  }
+}
+
+.wh-se-player {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  .wh-se-swatch {
+    margin-right: 0;
+  }
+}
+
+.wh-se-name {
+  font-weight: 500;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wh-se-vs {
+  opacity: 0.7;
+}
+
+.wh-se-duration-bar {
+  background-color: rgb(var(--v-theme-primary));
+  height: 3px;
+  border-radius: 2px;
+  margin-top: 2px;
+}
+
+.wh-se-header {
+  padding: 8px 16px 0;
+}
+
+.wh-se-ovo {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  grid-column-gap: 10px;
+  margin-bottom: 4px;
+}
+
+.wh-se-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  align-items: flex-start;
+
+  &--left {
+    align-items: flex-end;
+  }
+}
+
+.wh-se-side-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  .wh-se-swatch {
+    margin-right: 0;
+  }
+}
+
+.wh-se-bigname {
+  font-weight: bold;
+  font-size: 1.5em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  // Friz Medium's glyphs sit high in the line box (same optical nudge as the
+  // native match-detail header).
+  line-height: 1;
+  transform: translateY(0.13em);
+}
+
+.wh-se-ovo-vs {
+  font-size: 1.2em;
+  font-weight: bold;
+  padding: 0 8px;
+  line-height: 1;
+  transform: translateY(0.13em);
+}
+
+.wh-se-mapline {
+  padding-top: 8px;
+}
+
+.wh-se-section {
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  margin-top: 20px;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
+}
+
 .wh-se-bo {
   max-height: 420px;
 }
@@ -506,5 +703,11 @@ onMounted(async () => {
 
 .wh-se-food {
   width: 3.8em;
+}
+
+@media (max-width: 750px) {
+  .wh-se-bigname {
+    font-size: 1.1em;
+  }
 }
 </style>
