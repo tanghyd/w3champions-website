@@ -139,6 +139,16 @@
                 </v-list-item>
               </template>
             </v-autocomplete>
+            <v-select
+              v-if="step.event_type === 'hero_trained'"
+              v-model="step.hero_ordinal"
+              :items="heroOrdinalItems"
+              :label="$t('components_warehouse_search.heroOrdinal')"
+              density="compact"
+              variant="outlined"
+              hide-details
+              style="max-width: 140px"
+            />
             <v-text-field
               v-if="sIdx > 0"
               v-model.number="step.within_previous_seconds"
@@ -257,6 +267,7 @@ import { mdiClose, mdiMagnify, mdiPlus } from "@mdi/js";
 interface StepForm {
   event_type: EventType;
   subject: string | null;
+  hero_ordinal: number | null;
   within_previous_seconds: number | null;
   time_from_seconds: number | null;
   time_to_seconds: number | null;
@@ -276,6 +287,13 @@ const eventTypeItems = computed<{ title: string; value: EventType }[]>(() => [
   { title: t("components_warehouse_search.eventItem"), value: "item" },
   { title: t("components_warehouse_search.eventHeroSkill"), value: "hero_skill" },
   { title: t("components_warehouse_search.eventHeroTrained"), value: "hero_trained" },
+]);
+
+const heroOrdinalItems = computed<{ title: string; value: number | null }[]>(() => [
+  { title: t("components_warehouse_search.heroOrdinalAny"), value: null },
+  { title: t("components_warehouse_search.heroOrdinalFirst"), value: 1 },
+  { title: t("components_warehouse_search.heroOrdinalSecond"), value: 2 },
+  { title: t("components_warehouse_search.heroOrdinalThird"), value: 3 },
 ]);
 
 // Scope filter state
@@ -327,6 +345,7 @@ async function ensureMappings(eventType: EventType): Promise<void> {
 
 function onEventTypeChange(step: StepForm): void {
   step.subject = null;
+  step.hero_ordinal = null; // API 422s on non-hero_trained steps
   ensureMappings(step.event_type);
 }
 
@@ -343,6 +362,7 @@ function addStep(group: GroupForm): void {
   const step: StepForm = {
     event_type: "building",
     subject: null,
+    hero_ordinal: null,
     within_previous_seconds: null,
     time_from_seconds: null,
     time_to_seconds: null,
@@ -406,6 +426,9 @@ function buildRequest(): SearchRequest {
       group.steps = g.steps.map((s, i) => {
         const step: SequenceStep = { event_type: s.event_type };
         if (s.subject) step.subject = s.subject;
+        if (s.event_type === "hero_trained" && isNum(s.hero_ordinal)) {
+          step.hero_ordinal = s.hero_ordinal;
+        }
         if (i > 0 && isNum(s.within_previous_seconds)) {
           step.within_previous_seconds = s.within_previous_seconds;
         }

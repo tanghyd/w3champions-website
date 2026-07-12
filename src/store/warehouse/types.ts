@@ -18,6 +18,7 @@ export interface SequenceStep {
   subject?: string;
   subject_code?: string;
   within_previous_seconds?: number; // 1-3600, ignored on the first step
+  hero_ordinal?: number; // 1-3, hero_trained steps only: the player's Nth distinct hero
   time_from_seconds?: number;
   time_to_seconds?: number;
 }
