@@ -101,7 +101,7 @@ const { detail, slotColor } = defineProps<{
 
 const { t } = useI18n();
 
-type Layer = "heroes" | "skills" | "tech" | "research" | "items" | "cancels" | "herokills";
+type Layer = "heroes" | "skills" | "tech" | "research" | "items" | "itemswaps" | "cancels" | "herokills";
 const activeLayers = ref<Layer[]>(["tech", "heroes", "herokills"]);
 
 const layerOptions: { value: Layer; title: string }[] = [
@@ -110,6 +110,7 @@ const layerOptions: { value: Layer; title: string }[] = [
   { value: "skills", title: t("components_warehouse_statevents.catSkills") },
   { value: "research", title: t("components_warehouse_statevents.catResearch") },
   { value: "items", title: t("components_warehouse_statevents.catItems") },
+  { value: "itemswaps", title: t("components_warehouse_statevents.catItemSwaps") },
   { value: "cancels", title: t("components_warehouse_statevents.catCancels") },
   { value: "herokills", title: t("components_warehouse_statevents.catHeroKills") },
 ];
@@ -222,7 +223,7 @@ function markersFor(layer: Layer): Record<number, RawMarker[]> {
       }
     }
   }
-  if (layer === "heroes" || layer === "skills" || layer === "items") {
+  if (layer === "heroes" || layer === "skills") {
     for (const [slot, rows] of Object.entries(detail.heroes_by_slot ?? {})) {
       for (const r of rows) {
         if (layer === "heroes" && r.event === "HeroLevel") {
@@ -233,8 +234,37 @@ function markersFor(layer: Layer): Record<number, RawMarker[]> {
           });
         } else if (layer === "skills" && r.event === "HeroSkill") {
           push(Number(slot), mk(r.game_time_s, r.clock, null, r.detail, { title: `${r.clock} — ${r.hero}: ${r.detail}` }));
-        } else if (layer === "items" && (r.event === "HeroItemPickup" || r.event === "HeroItemBought")) {
-          push(Number(slot), mk(r.game_time_s, r.clock, null, r.detail));
+        }
+      }
+    }
+  }
+  if (layer === "items" || layer === "itemswaps") {
+    // Item economy vs juggling: buys/sells and creep-drop finds are decisions;
+    // drop→re-pickup pairs are healing/mana micro. No item instance ids exist,
+    // so a pickup counts as a re-pickup while the same player has an
+    // unmatched drop of the same item name outstanding, else as a find.
+    for (const [slot, rows] of Object.entries(detail.heroes_by_slot ?? {})) {
+      const pendingDrops = new Map<string, number>();
+      for (const r of [...rows].sort((a, b) => a.game_time_s - b.game_time_s)) {
+        const item = (name: string, key: string) =>
+          mk(r.game_time_s, r.clock, null, r.detail, {
+            title: `${r.clock} — ${t(`components_warehouse_statevents.${key}`, { item: name })}`,
+          });
+        if (r.event === "HeroItemBought") {
+          if (layer === "items") push(Number(slot), item(r.detail, "itemBought"));
+        } else if (r.event === "HeroItemSold") {
+          if (layer === "items") push(Number(slot), item(r.detail, "itemSold"));
+        } else if (r.event === "HeroItemDrop") {
+          pendingDrops.set(r.detail, (pendingDrops.get(r.detail) ?? 0) + 1);
+          if (layer === "itemswaps") push(Number(slot), item(r.detail, "itemDropped"));
+        } else if (r.event === "HeroItemPickup") {
+          const outstanding = pendingDrops.get(r.detail) ?? 0;
+          if (outstanding > 0) {
+            pendingDrops.set(r.detail, outstanding - 1);
+            if (layer === "itemswaps") push(Number(slot), item(r.detail, "itemPickedUp"));
+          } else if (layer === "items") {
+            push(Number(slot), item(r.detail, "itemFound"));
+          }
         }
       }
     }
