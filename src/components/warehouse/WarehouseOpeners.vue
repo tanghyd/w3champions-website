@@ -35,7 +35,7 @@
           <v-btn value="popular" size="small">{{ $t("components_warehouse_openers.popular") }}</v-btn>
           <v-btn value="winrate" size="small">{{ $t("components_warehouse_openers.highWinrate") }}</v-btn>
         </v-btn-toggle>
-        <span v-if="sort === 'winrate'" class="text-caption text-medium-emphasis ml-2 text-no-wrap">
+        <span class="text-caption text-medium-emphasis ml-2 text-no-wrap">
           {{ $t("components_warehouse_openers.winrateNote") }}
         </span>
       </div>
@@ -246,8 +246,19 @@ function winrate(child: OpenerChild): number {
   return Math.round((child.wins / child.matches) * 100);
 }
 
+// Diverging tint around 50% in 4-point steps (two per arm, neutral near-even).
+// Below the 10-match floor the rate is noise: muted text, no tint — same floor
+// the "High winrate" sort applies server-side.
+const WINRATE_TINT_MIN_MATCHES = 10;
+
 function winrateClass(child: OpenerChild): string {
-  return winrate(child) >= 50 ? "w3-won" : "w3-lost";
+  if (child.matches < WINRATE_TINT_MIN_MATCHES) return "text-medium-emphasis";
+  const wr = winrate(child);
+  if (wr < 44) return "w3-lost wh-wr-d2";
+  if (wr < 48) return "w3-lost wh-wr-d1";
+  if (wr <= 52) return "wh-wr-mid";
+  if (wr <= 56) return "w3-won wh-wr-u1";
+  return "w3-won wh-wr-u2";
 }
 
 function avgDuration(child: OpenerChild): string {
@@ -338,4 +349,13 @@ onMounted(async () => {
 .wh-crumb-clickable {
   cursor: pointer;
 }
+
+// Winrate cell tint — the site's won/lost hues (see w3-won / w3-lost) as
+// backgrounds, two alpha steps per arm; the printed % stays the primary
+// encoding, the tint is a glance layer.
+.wh-wr-u1 { background: rgba(76, 175, 80, 0.1); }
+.wh-wr-u2 { background: rgba(76, 175, 80, 0.22); }
+.wh-wr-mid { background: rgba(128, 128, 128, 0.08); }
+.wh-wr-d1 { background: rgba(229, 57, 53, 0.1); }
+.wh-wr-d2 { background: rgba(229, 57, 53, 0.22); }
 </style>

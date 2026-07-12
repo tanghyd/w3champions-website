@@ -23,10 +23,10 @@ import PlayerProfileTab from "@/components/player/tabs/PlayerProfileTab.vue";
 import TournamentDetail from "@/views/TournamentDetail.vue";
 import Rewards from "@/views/Rewards.vue";
 import Warehouse from "@/views/Warehouse.vue";
-import WarehouseReplays from "@/components/warehouse/WarehouseReplays.vue";
 import WarehouseSearch from "@/components/warehouse/WarehouseSearch.vue";
 import WarehouseOpeners from "@/components/warehouse/WarehouseOpeners.vue";
 import WarehouseStats from "@/components/warehouse/WarehouseStats.vue";
+import WarehouseStatEvents from "@/components/warehouse/WarehouseStatEvents.vue";
 import PatreonCallback from "@/views/PatreonCallback.vue";
 import SsoContinue from "@/views/SsoContinue.vue";
 import PlayerStatisticTab from "@/components/player/tabs/PlayerStatisticTab.vue";
@@ -334,19 +334,14 @@ const routes: RouteRecordRaw[] = [
   {
     // Preserve links to the pre-rename path.
     path: "/warehouse",
-    redirect: { name: EWarehouseRouteName.REPLAYS },
+    redirect: { name: EWarehouseRouteName.STATS },
   },
   {
     path: "/analytics",
     name: EMainRouteName.WAREHOUSE,
     component: Warehouse,
-    redirect: { name: EWarehouseRouteName.REPLAYS },
+    redirect: { name: EWarehouseRouteName.STATS },
     children: [
-      {
-        path: "",
-        name: EWarehouseRouteName.REPLAYS,
-        component: WarehouseReplays,
-      },
       {
         path: "search",
         name: EWarehouseRouteName.SEARCH,
@@ -359,8 +354,14 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: "stats",
+        alias: "",
         name: EWarehouseRouteName.STATS,
         component: WarehouseStats,
+      },
+      {
+        path: "stat-events",
+        name: EWarehouseRouteName.STAT_EVENTS,
+        component: WarehouseStatEvents,
       },
     ],
   },

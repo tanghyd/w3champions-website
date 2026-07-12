@@ -160,6 +160,139 @@ export interface WarehouseStats {
   durations: HistogramBucket[];
   apm: HistogramBucket[];
   mmr: HistogramBucket[];
+  // Replays inside the current filter scope (whole 1on1 corpus when unfiltered).
+  scope_count: number;
+}
+
+export interface StatsParams {
+  matchup?: Race[]; // sent as csv; /search semantics (1 = involving, 2 = exact pair)
+  map_name?: string;
+  seasons?: number[]; // sent as csv
+  min_mmr?: number;
+  max_mmr?: number;
+}
+
+// GET /beta/stat-events/* — instrumented-replay data. /beta contract: shapes
+// may change without notice, so fields the UI doesn't render stay untyped.
+export interface StatEventsPlayer {
+  slot: number;
+  name: string;
+  race: string;
+  team: number;
+}
+
+export interface StatEventsReplay {
+  replay_id: string;
+  map?: string;
+  played_at?: string | null;
+  duration_s: number;
+  events: number;
+  cancels?: number;
+  players: StatEventsPlayer[];
+}
+
+export interface StatEventsBuildRow {
+  t: number;
+  clock: string;
+  sequence: number;
+  player_slot: number;
+  kind: string; // unit | structure | upgrade | research...
+  phase: string; // start | finish | cancel | train...
+  name: string;
+  type_code: string;
+  food_used: number;
+  food_cap: number;
+}
+
+export interface StatEventsEconRow {
+  game_time_s: number;
+  player_slot: number;
+  gold: number;
+  wood: number;
+  food_used: number;
+  food_cap: number;
+  gold_upkeep: number;
+  wood_upkeep: number;
+}
+
+export interface StatEventsHeroRow {
+  game_time_s: number;
+  clock: string;
+  player_slot: number;
+  event: string; // trained | level | item | ability...
+  hero: string;
+  hero_code: string;
+  detail: string;
+  amount: number;
+  target: string;
+  [k: string]: unknown;
+}
+
+export interface StatEventsDeathRow {
+  game_time_s: number;
+  clock: string;
+  category: string;
+  name: string; // the unit that died
+  type_code: string;
+  is_hero: boolean | number;
+  victim_slot: number;
+  killer_slot: number;
+  killer: string; // resolved player name ('' when environment/unknown)
+  killer_name: string; // the killing unit
+  [k: string]: unknown;
+}
+
+export interface StatEventsKdRow {
+  slot: number;
+  name: string;
+  kills: number;
+  deaths: number;
+}
+
+export interface StatEventsDamageRow {
+  source_name: string;
+  target_name: string;
+  damage: number;
+  hits: number;
+  source_is_hero: boolean;
+  target_is_hero: boolean;
+}
+
+export interface StatEventsQaRow {
+  sender_slot: number;
+  events: number;
+  max_sequence: number;
+  missing_sequences: number;
+  checksums: number;
+  game_end_checks: number;
+}
+
+export interface StatEventsMinimap {
+  url: string;
+  bounds: [number, number, number, number]; // left, bottom, right, top (world coords)
+}
+
+export interface StatEventsDetail {
+  replay: StatEventsReplay;
+  slot_names: Record<string, string>;
+  minimap: StatEventsMinimap | null;
+  duration_clock: string;
+  build_by_slot: Record<string, StatEventsBuildRow[]>;
+  cancels: StatEventsBuildRow[];
+  econ_rows: StatEventsEconRow[];
+  heroes_by_slot: Record<string, StatEventsHeroRow[]>;
+  deaths: StatEventsDeathRow[];
+  qa_rows: StatEventsQaRow[];
+  qa_ok: boolean;
+  kills_by_unit: { name: string; count: number; is_hero: boolean }[];
+  kd_by_player: StatEventsKdRow[];
+  damage_by_matchup: StatEventsDamageRow[];
+  creep_rows: Record<string, unknown>[];
+  creep_by_slot: Record<string, Record<string, unknown>[]>;
+  spell_rows: Record<string, unknown>[];
+  spell_by_slot: Record<string, Record<string, unknown>[]>;
+  summon_rows: Record<string, unknown>[];
+  combat_rows: Record<string, unknown>[];
 }
 
 // GET /v1/openers

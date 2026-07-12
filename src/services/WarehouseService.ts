@@ -1,5 +1,5 @@
 import { WAREHOUSE_URL } from "@/config/env";
-import type { EventType, MapEntry, MappingEntry, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, SearchRequest, SearchResponse, SeasonEntry, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
+import type { EventType, MapEntry, MappingEntry, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, SearchRequest, SearchResponse, SeasonEntry, StatEventsDetail, StatEventsReplay, StatsParams, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
 
 // WAREHOUSE_URL may carry a trailing slash; the API lives under <base>/v1.
 const BASE = WAREHOUSE_URL.replace(/\/$/, "");
@@ -85,8 +85,32 @@ export default class WarehouseService {
     return getJson<PlayerEntry[]>("/players");
   }
 
-  public static getStats(): Promise<WarehouseStats> {
-    return getJson<WarehouseStats>("/stats");
+  public static getStats(params?: StatsParams): Promise<WarehouseStats> {
+    const q = new URLSearchParams();
+    if (params?.matchup && params.matchup.length) q.set("matchup", params.matchup.join(","));
+    if (params?.map_name) q.set("map_name", params.map_name);
+    if (params?.seasons && params.seasons.length) q.set("seasons", params.seasons.join(","));
+    if (params?.min_mmr != null) q.set("min_mmr", String(params.min_mmr));
+    if (params?.max_mmr != null) q.set("max_mmr", String(params.max_mmr));
+    const qs = q.toString();
+    return getJson<WarehouseStats>(`/stats${qs ? `?${qs}` : ""}`);
+  }
+
+  // Stat Events (instrumented replays) — /beta contract: shapes may change.
+  public static getStatEventsReplays(): Promise<StatEventsReplay[]> {
+    const response = fetch(`${BASE}/beta/stat-events/replays`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    return response.then(async (r) => (r.ok ? r.json() : Promise.reject(await toError(r))));
+  }
+
+  public static getStatEventsDetail(replayId: string): Promise<StatEventsDetail> {
+    const response = fetch(`${BASE}/beta/stat-events/replays/${encodeURIComponent(replayId)}/detail`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    return response.then(async (r) => (r.ok ? r.json() : Promise.reject(await toError(r))));
   }
 
   public static getOpeners(params: OpenersParams): Promise<OpenersResponse> {

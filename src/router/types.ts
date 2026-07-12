@@ -42,8 +42,8 @@ export enum EStatisticsRouteName {
 }
 
 export enum EWarehouseRouteName {
-  REPLAYS = "Analytics - Replays",
   SEARCH = "Analytics - Search",
+  STAT_EVENTS = "Analytics - Stat Events",
   OPENERS = "Analytics - Openers",
   STATS = "Analytics - Stats",
 }

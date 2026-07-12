@@ -17,17 +17,18 @@
           </v-card-title>
 
           <v-tabs>
-            <v-tab exact :to="{ name: EWarehouseRouteName.REPLAYS }">
-              {{ $t("views_warehouse.replays") }}
-            </v-tab>
-            <v-tab :to="{ name: EWarehouseRouteName.SEARCH }">
-              {{ $t("views_warehouse.search") }}
+            <v-tab exact :to="{ name: EWarehouseRouteName.STATS }">
+              {{ $t("views_warehouse.stats") }}
             </v-tab>
             <v-tab :to="{ name: EWarehouseRouteName.OPENERS }">
               {{ $t("views_warehouse.openers") }}
             </v-tab>
-            <v-tab :to="{ name: EWarehouseRouteName.STATS }">
-              {{ $t("views_warehouse.stats") }}
+            <v-tab :to="{ name: EWarehouseRouteName.SEARCH }">
+              {{ $t("views_warehouse.search") }}
+            </v-tab>
+            <v-tab :to="{ name: EWarehouseRouteName.STAT_EVENTS }">
+              {{ $t("views_warehouse.statEvents") }}
+              <v-chip size="x-small" variant="tonal" color="warning" class="ml-1">beta</v-chip>
             </v-tab>
           </v-tabs>
 

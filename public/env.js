@@ -22,6 +22,9 @@ window._env_ = {
   //* Turnstile site key
   TURNSTILE_SITE_KEY: "0x4AAAAAAB0hhXF_QHDGwhjQ",
 
-  //* w3warehouse dashboard embedded under /warehouse (local demo stack: docker compose up in ../w3warehouse)
-  WAREHOUSE_URL: "http://localhost:8000",
+  //* w3warehouse analytics backend (the Analytics section consumes its JSON API).
+  //* Local: any ../w3warehouse stack instance serves it — "./stack up demo" →
+  //* http://demo.localhost:8000 (Caddy routes by hostname; browsers resolve
+  //* *.localhost natively). A bare uvicorn run is http://localhost:8000.
+  WAREHOUSE_URL: "http://demo.localhost:8000",
 };

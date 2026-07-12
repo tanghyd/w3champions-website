@@ -4,8 +4,43 @@
       {{ apiError }}
     </v-alert>
 
+    <div class="matches-filter-scroll mb-2">
+      <div class="matches-filter-row d-flex align-center">
+        <warehouse-race-select
+          :model-value="raceA"
+          :label="$t('views_warehouse.race')"
+          @update:model-value="(v) => (raceA = v)"
+        />
+        <warehouse-race-select
+          :model-value="raceB"
+          :label="$t('views_warehouse.opponent')"
+          @update:model-value="(v) => (raceB = v)"
+        />
+        <warehouse-map-select
+          :model-value="mapName"
+          :label="$t('views_warehouse.map')"
+          :maps="maps"
+          @update:model-value="(v) => (mapName = v)"
+        />
+        <mmr-select :mmr="mmr" @mmrFilterChanged="(v) => (mmr = v)" />
+        <warehouse-season-select
+          :model-value="seasons"
+          :label="$t('views_warehouse.season')"
+          :seasons="seasonEntries"
+          @update:model-value="(v) => (seasons = v)"
+        />
+        <v-chip v-if="stats" size="small" variant="tonal" color="primary" class="ml-2 text-no-wrap">
+          {{ $t("components_warehouse_stats.gamesInScope", { n: stats.scope_count.toLocaleString() }) }}
+        </v-chip>
+      </div>
+    </div>
+
     <div v-if="loading" class="d-flex justify-center py-10">
       <v-progress-circular indeterminate color="primary" size="40" />
+    </div>
+
+    <div v-else-if="stats && stats.scope_count === 0" class="text-medium-emphasis py-8 text-center">
+      {{ $t("components_warehouse_stats.emptyScope") }}
     </div>
 
     <template v-else-if="stats">
@@ -61,17 +96,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BarChart from "@/components/overall-statistics/BarChart.vue";
 import RaceIcon from "@/components/player/RaceIcon.vue";
+import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
+import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
+import WarehouseSeasonSelect from "@/components/warehouse/filters/WarehouseSeasonSelect.vue";
+import MmrSelect from "@/components/common/MmrSelect.vue";
 import WarehouseService from "@/services/WarehouseService";
+import type { Mmr } from "@/store/match/types";
 import { ERaceEnum } from "@/store/types";
 import { raceShort, raceToEnum } from "@/components/warehouse/warehouse-helpers";
 import type {
   HeroPickrateGroup,
   HistogramBucket,
+  MapEntry,
   MatchupStat,
+  Race,
+  SeasonEntry,
+  StatsParams,
   WarehouseStats,
 } from "@/store/warehouse/types";
 import type { ChartData, ChartOptions } from "chart.js";
@@ -81,6 +125,14 @@ const { t } = useI18n();
 const stats = ref<WarehouseStats | null>(null);
 const loading = ref(false);
 const apiError = ref("");
+
+const maps = ref<MapEntry[]>([]);
+const seasonEntries = ref<SeasonEntry[]>([]);
+const raceA = ref<Race | null>(null);
+const raceB = ref<Race | null>(null);
+const mapName = ref<string | null>(null);
+const mmr = ref<Mmr>({ min: 0, max: 3000 });
+const seasons = ref<number[]>([]);
 
 const primaryColor = ref("rgb(54, 162, 235)");
 const wonColor = "rgb(76, 175, 80)";
@@ -186,21 +238,70 @@ function resolvePrimary(): void {
   }
 }
 
-onMounted(async () => {
-  resolvePrimary();
+function buildParams(): StatsParams {
+  const params: StatsParams = {};
+  const matchup = [raceA.value, raceB.value].filter((r): r is Race => !!r);
+  if (matchup.length) params.matchup = matchup;
+  if (mapName.value) params.map_name = mapName.value;
+  if (seasons.value.length) params.seasons = seasons.value;
+  if (mmr.value.min > 0) params.min_mmr = mmr.value.min;
+  if (mmr.value.max < 3000) params.max_mmr = mmr.value.max;
+  return params;
+}
+
+// Guard against out-of-order responses: only the newest request may write state.
+let loadSeq = 0;
+
+async function load(): Promise<void> {
+  const seq = ++loadSeq;
   loading.value = true;
+  apiError.value = "";
   try {
-    stats.value = await WarehouseService.getStats();
+    const res = await WarehouseService.getStats(buildParams());
+    if (seq !== loadSeq) return;
+    stats.value = res;
   } catch (e) {
+    if (seq !== loadSeq) return;
     apiError.value = e instanceof Error ? e.message : "Stats request failed";
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
+}
+
+// Re-fetch whenever any filter changes.
+watch([raceA, raceB, mapName, mmr, seasons], load, { deep: true });
+
+async function loadReference(): Promise<void> {
+  const [mapsRes, seasonsRes] = await Promise.allSettled([
+    WarehouseService.getMaps(),
+    WarehouseService.getSeasons(),
+  ]);
+  if (mapsRes.status === "fulfilled") maps.value = mapsRes.value;
+  if (seasonsRes.status === "fulfilled") seasonEntries.value = seasonsRes.value;
+}
+
+onMounted(async () => {
+  resolvePrimary();
+  await loadReference();
+  await load();
 });
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .chart-wrap {
   max-width: 900px;
+}
+
+.matches-filter-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 8px 8px;
+  margin: -2px -8px -8px;
+}
+
+.matches-filter-row {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap;
 }
 </style>
