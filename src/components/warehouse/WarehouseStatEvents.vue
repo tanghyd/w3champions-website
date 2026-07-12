@@ -196,9 +196,18 @@
         <!-- Economy -->
         <div class="wh-se-section text-h6">{{ $t("components_warehouse_statevents.economy") }}</div>
         <v-row class="mb-2">
-          <v-col v-for="series in econSeries" :key="series.key" cols="12" md="4">
+          <v-col v-for="series in econSeries" :key="series.key" cols="12" md="6">
             <div class="text-subtitle-2 mb-1">{{ series.label }}</div>
             <line-chart-generic :data="series.data" :options="econOptions" />
+          </v-col>
+        </v-row>
+        <v-row class="mb-2">
+          <v-col v-for="chart in supplyCharts" :key="chart.slot" cols="12" md="6">
+            <div class="text-subtitle-2 mb-1">
+              <span class="wh-se-swatch" :style="{ background: slotColor(chart.slot) }"></span>
+              {{ $t("components_warehouse_statevents.supply") }} — {{ slotName(chart.slot) }}
+            </div>
+            <line-chart-generic :data="chart.data" :options="chart.options" />
           </v-col>
         </v-row>
 
@@ -362,6 +371,7 @@ import {
   Legend,
 } from "chart.js";
 import { Line as LineChartGeneric } from "vue-chartjs";
+import chartJSPluginAnnotation from "chartjs-plugin-annotation";
 import WarehouseService from "@/services/WarehouseService";
 import WarehouseEntityIcon from "@/components/warehouse/WarehouseEntityIcon.vue";
 import WarehouseStatEventsMinimap from "@/components/warehouse/WarehouseStatEventsMinimap.vue";
@@ -387,7 +397,7 @@ import type {
 import type { ChartData, ChartOptions } from "chart.js";
 import { mdiArrowRight } from "@mdi/js";
 
-ChartJS.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
+ChartJS.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, chartJSPluginAnnotation);
 
 const { t } = useI18n();
 
@@ -494,16 +504,15 @@ function heroRows(slot: number): StatEventsHeroRow[] {
 const econSeries = computed(() => {
   const d = detail.value;
   if (!d) return [];
-  const bySlot: Record<string, { x: number; gold: number; wood: number; food: number }[]> = {};
+  const bySlot: Record<string, { x: number; gold: number; wood: number }[]> = {};
   for (const row of d.econ_rows) {
     (bySlot[String(row.player_slot)] ??= []).push({
       x: row.game_time_s,
       gold: row.gold,
       wood: row.wood,
-      food: row.food_used,
     });
   }
-  const make = (key: "gold" | "wood" | "food", label: string): { key: string; label: string; data: ChartData<"line"> } => ({
+  const make = (key: "gold" | "wood", label: string): { key: string; label: string; data: ChartData<"line"> } => ({
     key,
     label,
     data: {
@@ -521,7 +530,6 @@ const econSeries = computed(() => {
   return [
     make("gold", t("components_warehouse_statevents.gold")),
     make("wood", t("components_warehouse_statevents.lumber")),
-    make("food", t("components_warehouse_statevents.food")),
   ];
 });
 
@@ -535,6 +543,69 @@ const econOptions: ChartOptions<"line"> = {
     y: { beginAtZero: true },
   },
 };
+
+// Supply per player: food used (solid) vs cap (dotted), with the
+// supply-blocked windows (used >= cap) shaded in the player's color.
+const supplyCharts = computed(() => {
+  const d = detail.value;
+  if (!d) return [];
+  return playerSlots.value.map((slot) => {
+    const rows = d.econ_rows.filter((r) => r.player_slot === slot);
+    const color = slotColor(slot);
+    // Collapse consecutive blocked snapshots into [xMin, xMax) windows; the
+    // block holds until the next snapshot shows headroom again.
+    const blocked: { xMin: number; xMax: number }[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].food_used < rows[i].food_cap) continue;
+      const from = rows[i].game_time_s;
+      while (i + 1 < rows.length && rows[i + 1].food_used >= rows[i + 1].food_cap) i++;
+      const to = rows[i + 1]?.game_time_s ?? rows[i].game_time_s;
+      blocked.push({ xMin: from / 60, xMax: Math.max(to, from + 5) / 60 });
+    }
+    const data: ChartData<"line"> = {
+      datasets: [
+        {
+          label: t("components_warehouse_statevents.supplyUsed"),
+          data: rows.map((r) => ({ x: r.game_time_s / 60, y: r.food_used })),
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointStyle: "line",
+          tension: 0.2,
+        },
+        {
+          label: t("components_warehouse_statevents.supplyCap"),
+          data: rows.map((r) => ({ x: r.game_time_s / 60, y: r.food_cap })),
+          borderColor: color,
+          backgroundColor: color,
+          borderDash: [4, 4],
+          borderWidth: 2,
+          pointRadius: 0,
+          pointStyle: "line",
+          stepped: "before",
+        },
+      ],
+    };
+    const options: ChartOptions<"line"> = {
+      ...econOptions,
+      plugins: {
+        legend: { display: true, labels: { usePointStyle: true } },
+        annotation: {
+          annotations: blocked.map((b) => ({
+            type: "box",
+            xMin: b.xMin,
+            xMax: b.xMax,
+            backgroundColor: `${color}30`,
+            borderWidth: 0,
+            drawTime: "beforeDatasetsDraw",
+          })),
+        },
+      },
+    };
+    return { slot, data, options };
+  });
+});
 
 async function select(replayId: string): Promise<void> {
   if (selectedId.value === replayId) return;
