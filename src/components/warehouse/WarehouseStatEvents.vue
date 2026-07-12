@@ -13,6 +13,10 @@
     </div>
 
     <template v-else>
+      <div class="text-caption text-medium-emphasis mb-2">
+        {{ $t("components_warehouse_statevents.scopeNote") }}
+      </div>
+
       <!-- Replay index -->
       <div class="elevation-1 overflow-x-auto overflow-y-hidden mb-4">
         <table class="custom-table">
@@ -35,6 +39,7 @@
               <td>
                 <span v-for="p in r.players" :key="p.slot" class="mr-3 text-no-wrap">
                   <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+                  <race-icon :key="p.race" :race="raceEnum(p.race)" />
                   {{ p.name }}
                 </span>
               </td>
@@ -53,10 +58,14 @@
       <template v-else-if="detail">
         <!-- Game summary -->
         <div class="d-flex align-center flex-wrap ga-3 mb-4">
-          <span v-for="p in detail.replay.players" :key="p.slot" class="text-subtitle-2 text-no-wrap">
-            <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
-            {{ p.name }} <span class="text-medium-emphasis">({{ p.race }})</span>
-          </span>
+          <template v-for="(team, ti) in teams" :key="ti">
+            <span v-if="ti > 0" class="text-medium-emphasis">{{ $t("views_matchdetail.vs") }}</span>
+            <span v-for="p in team" :key="p.slot" class="text-subtitle-2 text-no-wrap">
+              <span class="wh-se-swatch" :style="{ background: slotColor(p.slot) }"></span>
+              <race-icon :key="p.race" :race="raceEnum(p.race)" />
+              {{ p.name }}
+            </span>
+          </template>
           <v-chip size="small" variant="tonal">{{ detail.duration_clock }}</v-chip>
           <v-chip size="small" variant="tonal" :color="detail.qa_ok ? 'success' : 'error'">
             {{ detail.qa_ok
@@ -68,22 +77,24 @@
         <!-- Build orders -->
         <div class="text-h6 mb-1">{{ $t("components_warehouse_statevents.buildOrders") }}</div>
         <div class="d-flex align-center flex-wrap ga-2 mb-2">
-          <v-btn-toggle v-model="phaseFilter" density="compact" variant="outlined" divided mandatory>
-            <v-btn value="build" size="small">{{ $t("components_warehouse_statevents.phaseBuild") }}</v-btn>
-            <v-btn value="cancel" size="small">{{ $t("components_warehouse_statevents.phaseCancels") }}</v-btn>
-            <v-btn value="all" size="small">{{ $t("components_warehouse_statevents.phaseAll") }}</v-btn>
-          </v-btn-toggle>
-          <v-btn-toggle v-model="kindFilter" density="compact" variant="outlined" divided mandatory>
-            <v-btn value="all" size="small">{{ $t("components_warehouse_statevents.kindAll") }}</v-btn>
-            <v-btn value="structure" size="small">{{ $t("components_warehouse_statevents.kindStructures") }}</v-btn>
-            <v-btn value="unit" size="small">{{ $t("components_warehouse_statevents.kindUnits") }}</v-btn>
-            <v-btn value="upgrade" size="small">{{ $t("components_warehouse_statevents.kindUpgrades") }}</v-btn>
-          </v-btn-toggle>
+          <warehouse-option-select
+            :model-value="phaseFilter"
+            :label="$t('components_warehouse_statevents.phaseLabel')"
+            :options="phaseOptions"
+            @update:model-value="(v) => (phaseFilter = v as PhaseFilter)"
+          />
+          <warehouse-option-select
+            :model-value="kindFilter"
+            :label="$t('components_warehouse_statevents.kindLabel')"
+            :options="kindOptions"
+            @update:model-value="(v) => (kindFilter = v as KindFilter)"
+          />
         </div>
         <v-row class="mb-2">
           <v-col v-for="slot in playerSlots" :key="slot" cols="12" md="6">
             <div class="text-subtitle-2 mb-1">
               <span class="wh-se-swatch" :style="{ background: slotColor(slot) }"></span>
+              <race-icon :key="slotRace(slot)" :race="raceEnum(slotRace(slot))" />
               {{ slotName(slot) }}
             </div>
             <div class="elevation-1 overflow-y-auto wh-se-bo">
@@ -93,9 +104,15 @@
                     <td class="number-text wh-se-clock">{{ row.clock }}</td>
                     <td class="number-text text-medium-emphasis wh-se-food">{{ row.food_used }}/{{ row.food_cap }}</td>
                     <td>
+                      <warehouse-entity-icon :code="row.type_code" :name="row.name" />
                       {{ row.name }}
                       <span v-if="row.phase === 'cancel'" class="w3-lost text-caption ml-1">
-                        {{ $t("components_warehouse_statevents.cancelled") }}
+                        {{ row.start_clock
+                          ? $t("components_warehouse_statevents.cancelledOfStart", { clock: row.start_clock })
+                          : $t("components_warehouse_statevents.cancelled") }}
+                      </span>
+                      <span v-else-if="row.cancelled" class="w3-lost text-caption ml-1">
+                        {{ $t("components_warehouse_statevents.cancelledAt", { clock: row.cancelled_clock }) }}
                       </span>
                       <span v-else-if="phaseFilter === 'all'" class="text-caption text-medium-emphasis ml-1">{{ row.phase }}</span>
                     </td>
@@ -120,6 +137,12 @@
           </v-col>
         </v-row>
 
+        <!-- Map activity -->
+        <template v-if="detail.minimap">
+          <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.mapActivity") }}</div>
+          <warehouse-stat-events-minimap :detail="detail" :slot-color="slotColor" class="mb-4" />
+        </template>
+
         <!-- Combat: K/D, kills by unit, damage pairs -->
         <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.combat") }}</div>
         <v-row class="mb-2">
@@ -129,7 +152,11 @@
               <table class="custom-table">
                 <tbody>
                   <tr v-for="row in detail.kd_by_player" :key="row.slot">
-                    <td><span class="wh-se-swatch" :style="{ background: slotColor(row.slot) }"></span>{{ row.name }}</td>
+                    <td>
+                      <span class="wh-se-swatch" :style="{ background: slotColor(row.slot) }"></span>
+                      <race-icon :key="slotRace(row.slot)" :race="raceEnum(slotRace(row.slot))" />
+                      {{ row.name }}
+                    </td>
                     <td class="text-end number-text">{{ row.kills }} / {{ row.deaths }}</td>
                   </tr>
                 </tbody>
@@ -142,7 +169,10 @@
               <table class="custom-table">
                 <tbody>
                   <tr v-for="row in detail.kills_by_unit" :key="row.name">
-                    <td :class="{ 'w3-race-gold': row.is_hero }">{{ row.name }}</td>
+                    <td>
+                      <warehouse-entity-icon :code="row.code" :name="row.name" />
+                      <span :class="{ 'w3-gray-gold-text': row.is_hero }">{{ row.name }}</span>
+                    </td>
                     <td class="text-end number-text">{{ row.count }}</td>
                   </tr>
                 </tbody>
@@ -156,9 +186,11 @@
                 <tbody>
                   <tr v-for="(row, idx) in detail.damage_by_matchup" :key="idx">
                     <td>
-                      <span :class="{ 'w3-race-gold': row.source_is_hero }">{{ row.source_name }}</span>
-                      <v-icon size="x-small">{{ mdiArrowRight }}</v-icon>
-                      <span :class="{ 'w3-race-gold': row.target_is_hero }">{{ row.target_name }}</span>
+                      <warehouse-entity-icon :code="row.source_code" :name="row.source_name" />
+                      <span :class="{ 'w3-gray-gold-text': row.source_is_hero }">{{ row.source_name }}</span>
+                      <v-icon size="x-small" class="mx-1">{{ mdiArrowRight }}</v-icon>
+                      <warehouse-entity-icon :code="row.target_code" :name="row.target_name" />
+                      <span :class="{ 'w3-gray-gold-text': row.target_is_hero }">{{ row.target_name }}</span>
                     </td>
                     <td class="text-end number-text">{{ row.damage.toLocaleString() }}</td>
                   </tr>
@@ -174,6 +206,7 @@
           <v-col v-for="slot in playerSlots" :key="slot" cols="12" md="6">
             <div class="text-subtitle-2 mb-1">
               <span class="wh-se-swatch" :style="{ background: slotColor(slot) }"></span>
+              <race-icon :key="slotRace(slot)" :race="raceEnum(slotRace(slot))" />
               {{ slotName(slot) }}
             </div>
             <div class="elevation-1 overflow-y-auto wh-se-bo">
@@ -181,9 +214,13 @@
                 <tbody>
                   <tr v-for="(row, idx) in heroRows(slot)" :key="idx">
                     <td class="number-text wh-se-clock">{{ row.clock }}</td>
-                    <td>{{ row.hero }}</td>
+                    <td><warehouse-entity-icon :code="row.hero_code" :name="row.hero" />{{ row.hero }}</td>
                     <td class="text-medium-emphasis">
-                      {{ row.event }}<span v-if="row.detail"> — {{ row.detail }}</span>
+                      {{ row.event }}<template v-if="row.detail">
+                        <span> — </span>
+                        <warehouse-entity-icon :name="row.detail" />
+                        <span>{{ row.detail }}</span>
+                      </template>
                       <span v-if="row.amount"> ({{ row.amount }})</span>
                     </td>
                   </tr>
@@ -215,11 +252,18 @@
                 <td class="number-text wh-se-clock">{{ row.clock }}</td>
                 <td>
                   <span class="wh-se-swatch" :style="{ background: slotColor(row.victim_slot) }"></span>
+                  <race-icon :key="slotRace(row.victim_slot)" :race="raceEnum(slotRace(row.victim_slot))" />
                   {{ slotName(row.victim_slot) }}
                 </td>
-                <td :class="{ 'w3-race-gold': !!row.is_hero }">{{ row.name }}</td>
                 <td>
-                  <template v-if="row.killer_name">{{ row.killer_name }}<span v-if="row.killer" class="text-medium-emphasis"> ({{ row.killer }})</span></template>
+                  <warehouse-entity-icon :code="row.type_code" :name="row.name" />
+                  <span :class="{ 'w3-gray-gold-text': !!row.is_hero }">{{ row.name }}</span>
+                </td>
+                <td>
+                  <template v-if="row.killer_name">
+                    <warehouse-entity-icon :name="row.killer_name" />
+                    {{ row.killer_name }}<span v-if="row.killer" class="text-medium-emphasis"> ({{ row.killer }})</span>
+                  </template>
                   <span v-else class="text-disabled">&mdash;</span>
                 </td>
               </tr>
@@ -249,6 +293,13 @@ import {
 } from "chart.js";
 import { Line as LineChartGeneric } from "vue-chartjs";
 import WarehouseService from "@/services/WarehouseService";
+import WarehouseEntityIcon from "@/components/warehouse/WarehouseEntityIcon.vue";
+import WarehouseStatEventsMinimap from "@/components/warehouse/WarehouseStatEventsMinimap.vue";
+import RaceIcon from "@/components/player/RaceIcon.vue";
+import { ERaceEnum } from "@/store/types";
+import { raceToEnum } from "@/components/warehouse/warehouse-helpers";
+import WarehouseOptionSelect from "@/components/warehouse/filters/WarehouseOptionSelect.vue";
+import { ensureIconIndex } from "@/components/warehouse/warehouse-icons";
 import type {
   StatEventsBuildRow,
   StatEventsDetail,
@@ -269,8 +320,22 @@ const loading = ref(false);
 const detailLoading = ref(false);
 const apiError = ref("");
 
-const phaseFilter = ref<"build" | "cancel" | "all">("build");
-const kindFilter = ref<"all" | "structure" | "unit" | "upgrade">("all");
+type PhaseFilter = "build" | "cancel" | "all";
+type KindFilter = "all" | "structure" | "unit" | "upgrade";
+const phaseFilter = ref<PhaseFilter>("build");
+const kindFilter = ref<KindFilter>("all");
+
+const phaseOptions = [
+  { value: "build", title: t("components_warehouse_statevents.phaseBuild") },
+  { value: "cancel", title: t("components_warehouse_statevents.phaseCancels") },
+  { value: "all", title: t("components_warehouse_statevents.phaseAll") },
+];
+const kindOptions = [
+  { value: "all", title: t("components_warehouse_statevents.kindAll") },
+  { value: "structure", title: t("components_warehouse_statevents.kindStructures") },
+  { value: "unit", title: t("components_warehouse_statevents.kindUnits") },
+  { value: "upgrade", title: t("components_warehouse_statevents.kindUpgrades") },
+];
 
 // Fixed slot → color identity, same palette the retired dashboard validated
 // for dark surfaces; color follows the player everywhere on the page.
@@ -288,6 +353,25 @@ function clock(seconds: number): string {
 const playerSlots = computed<number[]>(() =>
   (detail.value?.replay.players ?? []).map((p) => p.slot)
 );
+
+const teams = computed(() => {
+  const players = detail.value?.replay.players ?? [];
+  const byTeam = new Map<number, typeof players>();
+  for (const p of players) {
+    const group = byTeam.get(p.team) ?? [];
+    group.push(p);
+    byTeam.set(p.team, group);
+  }
+  return [...byTeam.entries()].sort((a, b) => a[0] - b[0]).map(([, g]) => g);
+});
+
+function slotRace(slot: number): string {
+  return detail.value?.replay.players.find((p) => p.slot === slot)?.race ?? "";
+}
+
+function raceEnum(race: string): ERaceEnum {
+  return raceToEnum(race);
+}
 
 function slotName(slot: number): string {
   return detail.value?.slot_names?.[String(slot)] ?? `slot ${slot}`;
@@ -369,6 +453,7 @@ async function select(replayId: string): Promise<void> {
 }
 
 onMounted(async () => {
+  void ensureIconIndex();
   loading.value = true;
   try {
     replays.value = await WarehouseService.getStatEventsReplays();

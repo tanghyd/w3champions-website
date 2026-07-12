@@ -170,6 +170,7 @@ export interface StatsParams {
   seasons?: number[]; // sent as csv
   min_mmr?: number;
   max_mmr?: number;
+  w3c_linked_only?: boolean; // Analytics forces true
 }
 
 // GET /beta/stat-events/* — instrumented-replay data. /beta contract: shapes
@@ -196,12 +197,21 @@ export interface StatEventsBuildRow {
   clock: string;
   sequence: number;
   player_slot: number;
-  kind: string; // unit | structure | upgrade | research...
-  phase: string; // start | finish | cancel | train...
+  kind: string; // unit | structure | upgrade | research
+  phase: string; // start | cancel | complete
   name: string;
   type_code: string;
+  x: number;
+  y: number;
   food_used: number;
   food_cap: number;
+  // Exact-cancel attribution (position join, see the API): a start that was
+  // later cancelled, and on the cancel row, when its start happened.
+  cancelled?: boolean;
+  cancelled_clock?: string;
+  start_clock?: string;
+  // Multi-level research/upgrades: 1-based occurrence per player+code.
+  level?: number;
 }
 
 export interface StatEventsEconRow {
@@ -252,6 +262,8 @@ export interface StatEventsKdRow {
 export interface StatEventsDamageRow {
   source_name: string;
   target_name: string;
+  source_code?: string;
+  target_code?: string;
   damage: number;
   hits: number;
   source_is_hero: boolean;
@@ -284,7 +296,7 @@ export interface StatEventsDetail {
   deaths: StatEventsDeathRow[];
   qa_rows: StatEventsQaRow[];
   qa_ok: boolean;
-  kills_by_unit: { name: string; count: number; is_hero: boolean }[];
+  kills_by_unit: { name: string; code?: string; count: number; is_hero: boolean }[];
   kd_by_player: StatEventsKdRow[];
   damage_by_matchup: StatEventsDamageRow[];
   creep_rows: Record<string, unknown>[];
@@ -326,6 +338,10 @@ export interface OpenersParams {
   min_mmr?: number;
   max_mmr?: number;
   players?: string[]; // sent as csv
+  w3c_linked_only?: boolean; // Analytics forces true: aggregate + list only match-linked replays
+  // With race=Random: only games where the Random player ROLLED this race
+  // (inferred from their building codes — rawcode first letters are race-pure).
+  rolled_race?: Race;
 }
 
 // POST /v1/openers/replays
@@ -337,6 +353,8 @@ export interface OpenerReplaysRequest {
   min_mmr?: number;
   max_mmr?: number;
   players?: string[];
+  w3c_linked_only?: boolean;
+  rolled_race?: Race;
 }
 
 export interface OpenerReplaysResponse {

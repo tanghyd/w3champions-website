@@ -12,14 +12,24 @@ export const WAREHOUSE_RACES: Race[] = ["Human", "Orc", "NightElf", "Undead", "R
 
 // Race string -> the site's ERaceEnum (drives PlayerIcon / RaceIcon).
 export function raceToEnum(race: string | null | undefined): ERaceEnum {
-  switch (race) {
-    case "Human":
+  // Tolerant on purpose: sources disagree on casing/shape ("NightElf" from
+  // the /v1 contract, "nightelf" from stat-events, single letters in places).
+  switch ((race ?? "").toLowerCase().replace(/[^a-z]/g, "")) {
+    case "human":
+    case "hu":
+    case "h":
       return ERaceEnum.HUMAN;
-    case "Orc":
+    case "orc":
+    case "oc":
+    case "o":
       return ERaceEnum.ORC;
-    case "NightElf":
+    case "nightelf":
+    case "ne":
+    case "n":
       return ERaceEnum.NIGHT_ELF;
-    case "Undead":
+    case "undead":
+    case "ud":
+    case "u":
       return ERaceEnum.UNDEAD;
     default:
       return ERaceEnum.RANDOM;

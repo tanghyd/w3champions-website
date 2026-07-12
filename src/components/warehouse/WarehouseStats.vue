@@ -35,6 +35,10 @@
       </div>
     </div>
 
+    <div class="text-caption text-medium-emphasis mb-2">
+      {{ $t("components_warehouse_stats.scopeNote") }}
+    </div>
+
     <div v-if="loading" class="d-flex justify-center py-10">
       <v-progress-circular indeterminate color="primary" size="40" />
     </div>
@@ -59,8 +63,13 @@
             <race-icon :key="group.race" :race="raceEnum(group.race)" />
             <span class="text-subtitle-2">{{ $t(`races.${raceKey(group.race)}`) }}</span>
           </div>
-          <div v-if="group.heroes.length" class="chart-wrap" style="position: relative">
-            <bar-chart :chart-data="heroData(group)" :chart-options="heroOptions" />
+          <div v-if="group.heroes.length" class="wh-hero-rows">
+            <div v-for="h in group.heroes" :key="h.hero" class="wh-hero-row">
+              <warehouse-entity-icon :name="h.hero" :size="24" />
+              <span class="wh-hero-name">{{ h.hero }}</span>
+              <span class="wh-hero-bar"><span class="wh-hero-bar-fill" :style="{ width: h.pct + '%' }"></span></span>
+              <span class="number-text wh-hero-pct">{{ h.pct }}%</span>
+            </div>
           </div>
           <div v-else class="text-medium-emphasis py-2">{{ $t("components_warehouse_stats.noData") }}</div>
         </v-col>
@@ -99,6 +108,8 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import BarChart from "@/components/overall-statistics/BarChart.vue";
+import WarehouseEntityIcon from "@/components/warehouse/WarehouseEntityIcon.vue";
+import { ensureIconIndex } from "@/components/warehouse/warehouse-icons";
 import RaceIcon from "@/components/player/RaceIcon.vue";
 import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
 import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
@@ -135,8 +146,8 @@ const mmr = ref<Mmr>({ min: 0, max: 3000 });
 const seasons = ref<number[]>([]);
 
 const primaryColor = ref("rgb(54, 162, 235)");
-const wonColor = "rgb(76, 175, 80)";
-const lostColor = "rgb(229, 57, 53)";
+const wonColor = ref("rgb(76, 175, 80)");
+const lostColor = ref("rgb(229, 57, 53)");
 
 const matchups = computed<MatchupStat[]>(() => stats.value?.matchups ?? []);
 const heroGroups = computed<HeroPickrateGroup[]>(() => stats.value?.hero_pickrates ?? []);
@@ -163,8 +174,8 @@ const matchupData = computed<ChartData<"bar">>(() => ({
     {
       label: t("components_warehouse_stats.winratePct"),
       data: matchups.value.map((m) => Math.round(m.pct_a)),
-      backgroundColor: matchups.value.map((m) => withAlpha(m.pct_a >= 50 ? wonColor : lostColor, 0.6)),
-      borderColor: matchups.value.map((m) => (m.pct_a >= 50 ? wonColor : lostColor)),
+      backgroundColor: matchups.value.map((m) => withAlpha(m.pct_a >= 50 ? wonColor.value : lostColor.value, 0.6)),
+      borderColor: matchups.value.map((m) => (m.pct_a >= 50 ? wonColor.value : lostColor.value)),
       borderWidth: 1,
     },
   ],
@@ -185,28 +196,6 @@ const matchupOptions = computed<ChartOptions<"bar">>(() => ({
   },
   maintainAspectRatio: true,
   scales: { y: { beginAtZero: true, max: 100 } },
-}));
-
-// (b) Hero pickrates: small bar chart per race, height = pick %.
-function heroData(group: HeroPickrateGroup): ChartData<"bar"> {
-  return {
-    labels: group.heroes.map((h) => h.hero),
-    datasets: [
-      {
-        label: t("components_warehouse_stats.pickPct"),
-        data: group.heroes.map((h) => Math.round(h.pct)),
-        backgroundColor: withAlpha(primaryColor.value, 0.5),
-        borderColor: primaryColor.value,
-        borderWidth: 1,
-      },
-    ],
-  };
-}
-
-const heroOptions = computed<ChartOptions<"bar">>(() => ({
-  plugins: { legend: { display: false } },
-  maintainAspectRatio: true,
-  scales: { y: { beginAtZero: true } },
 }));
 
 // (c) Histograms: x = bucket, y = n.
@@ -231,15 +220,25 @@ const histogramOptions = computed<ChartOptions<"bar">>(() => ({
   scales: { y: { beginAtZero: true } },
 }));
 
-function resolvePrimary(): void {
-  const raw = getComputedStyle(document.body).getPropertyValue("--v-theme-primary").trim();
+// chart.js can't read CSS vars — resolve the theme tokens once at mount so
+// the chart colors follow the active race theme like every styled element.
+function resolveThemeColor(token: string, into: { value: string }): void {
+  const raw = getComputedStyle(document.body).getPropertyValue(token).trim();
   if (/^\d+\s*,\s*\d+\s*,\s*\d+$/.test(raw)) {
-    primaryColor.value = `rgb(${raw.replace(/\s+/g, "")})`;
+    into.value = `rgb(${raw.replace(/\s+/g, "")})`;
   }
 }
 
+function resolvePrimary(): void {
+  resolveThemeColor("--v-theme-primary", primaryColor);
+  resolveThemeColor("--v-theme-success", wonColor);
+  resolveThemeColor("--v-theme-lost", lostColor);
+}
+
 function buildParams(): StatsParams {
-  const params: StatsParams = {};
+  // Analytics is match-linked-only: aggregates cover only replays that map
+  // to a w3champions match (Stat Events is the sole exception).
+  const params: StatsParams = { w3c_linked_only: true };
   const matchup = [raceA.value, raceB.value].filter((r): r is Race => !!r);
   if (matchup.length) params.matchup = matchup;
   if (mapName.value) params.map_name = mapName.value;
@@ -282,6 +281,7 @@ async function loadReference(): Promise<void> {
 
 onMounted(async () => {
   resolvePrimary();
+  void ensureIconIndex();
   await loadReference();
   await load();
 });
@@ -290,6 +290,42 @@ onMounted(async () => {
 <style lang="scss" scoped>
 .chart-wrap {
   max-width: 900px;
+}
+
+.wh-hero-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.wh-hero-name {
+  flex: 0 0 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.wh-hero-bar {
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  overflow: hidden;
+}
+
+.wh-hero-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: rgba(var(--v-theme-primary), 0.65);
+}
+
+.wh-hero-pct {
+  flex: 0 0 3.2em;
+  text-align: right;
+  font-size: 0.82rem;
 }
 
 .matches-filter-scroll {

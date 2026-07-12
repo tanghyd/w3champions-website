@@ -4,6 +4,10 @@
       {{ apiError }}
     </v-alert>
 
+    <div class="text-caption text-medium-emphasis mb-2">
+      {{ $t("components_warehouse_search.scopeNote") }}
+    </div>
+
     <!-- Scope filters: matchup first, then map / seasons / mmr / duration / players. -->
     <div class="matches-filter-scroll mb-2">
       <div class="matches-filter-row d-flex align-center">

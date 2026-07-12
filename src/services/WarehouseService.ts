@@ -92,6 +92,7 @@ export default class WarehouseService {
     if (params?.seasons && params.seasons.length) q.set("seasons", params.seasons.join(","));
     if (params?.min_mmr != null) q.set("min_mmr", String(params.min_mmr));
     if (params?.max_mmr != null) q.set("max_mmr", String(params.max_mmr));
+    if (params?.w3c_linked_only) q.set("w3c_linked_only", "true");
     const qs = q.toString();
     return getJson<WarehouseStats>(`/stats${qs ? `?${qs}` : ""}`);
   }
@@ -123,6 +124,8 @@ export default class WarehouseService {
     if (params.min_mmr != null) q.set("min_mmr", String(params.min_mmr));
     if (params.max_mmr != null) q.set("max_mmr", String(params.max_mmr));
     if (params.players && params.players.length) q.set("players", params.players.join(","));
+    if (params.w3c_linked_only) q.set("w3c_linked_only", "true");
+    if (params.rolled_race) q.set("rolled_race", params.rolled_race);
     return getJson<OpenersResponse>(`/openers?${q.toString()}`);
   }
 

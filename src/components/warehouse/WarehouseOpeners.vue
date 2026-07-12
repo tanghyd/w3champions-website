@@ -12,6 +12,13 @@
           :allow-any="false"
           @update:model-value="(v) => setFilter('myRace', v ?? 'Human')"
         />
+        <warehouse-option-select
+          v-if="myRace === 'Random'"
+          :model-value="rolledRace"
+          :label="$t('components_warehouse_openers.rolled')"
+          :options="rolledOptions"
+          @update:model-value="onRolled"
+        />
         <warehouse-race-select
           :model-value="opponentRace"
           :label="$t('views_warehouse.opponent')"
@@ -24,35 +31,21 @@
           @update:model-value="(v) => setFilter('mapName', v)"
         />
         <mmr-select :mmr="mmr" @mmrFilterChanged="onMmr" />
-        <v-btn-toggle
+        <warehouse-option-select
           :model-value="sort"
-          density="compact"
-          variant="outlined"
-          divided
-          mandatory
+          :label="$t('components_warehouse_openers.sortBy')"
+          :icon="mdiSort"
+          :options="sortOptions"
           @update:model-value="onSort"
-        >
-          <v-btn value="popular" size="small">{{ $t("components_warehouse_openers.popular") }}</v-btn>
-          <v-btn value="winrate" size="small">{{ $t("components_warehouse_openers.highWinrate") }}</v-btn>
-        </v-btn-toggle>
+        />
         <span class="text-caption text-medium-emphasis ml-2 text-no-wrap">
           {{ $t("components_warehouse_openers.winrateNote") }}
         </span>
       </div>
     </div>
 
-    <!-- Breadcrumb of the current opener prefix. -->
-    <div class="d-flex align-center flex-wrap ga-2 mb-3">
-      <v-chip size="small" variant="tonal" :class="{ 'wh-crumb-clickable': prefix.length }" @click="jumpTo(0)">
-        <race-icon :key="myRace" :race="raceEnum(myRace)" />
-        <span class="ml-1">{{ $t("components_warehouse_openers.opening") }}</span>
-      </v-chip>
-      <template v-for="(code, idx) in prefix" :key="idx">
-        <v-icon size="small">{{ mdiChevronRight }}</v-icon>
-        <span class="wh-crumb-clickable" @click="jumpTo(idx + 1)">
-          <warehouse-code-chip :code="code" :codes="codes" :clickable="true" />
-        </span>
-      </template>
+    <div class="text-caption text-medium-emphasis mb-2">
+      {{ $t("components_warehouse_openers.scopeNote") }}
     </div>
 
     <div v-if="loading" class="d-flex justify-center py-10">
@@ -78,19 +71,32 @@
           </thead>
           <tbody>
             <tr
-              v-for="(child, idx) in children"
-              :key="idx"
-              class="cursor-pointer"
-              @click="drillInto(child)"
+              v-for="child in rows"
+              :key="child.prefix.join(',')"
+              :class="{ 'cursor-pointer': child.branch_factor > 0 }"
+              @click="toggle(child)"
             >
               <td>
-                <div class="d-flex align-center flex-wrap ga-1">
+                <div class="d-flex align-center flex-nowrap ga-1">
                   <warehouse-code-chip
-                    v-for="(code, cIdx) in newCodes(child)"
+                    v-for="(code, cIdx) in child.prefix"
                     :key="cIdx"
                     :code="code"
                     :codes="codes"
+                    :class="{ 'wh-chain-dim': cIdx < child.prefix.length - 1 }"
                   />
+                  <v-btn
+                    v-if="child.branch_factor > 0"
+                    size="x-small"
+                    variant="outlined"
+                    class="wh-expand-tile number-text"
+                    @click.stop="toggle(child)"
+                  >
+                    <template v-if="child.expanded">
+                      <v-icon size="small">{{ mdiChevronDown }}</v-icon>
+                    </template>
+                    <template v-else>+{{ child.branch_factor }}</template>
+                  </v-btn>
                 </div>
               </td>
               <td class="text-end number-text">{{ child.matches }}</td>
@@ -120,7 +126,7 @@
                 </v-tooltip>
               </td>
             </tr>
-            <tr v-if="!children.length">
+            <tr v-if="!rows.length">
               <td colspan="6" class="text-center text-medium-emphasis">
                 {{ $t("components_warehouse_openers.noOpeners") }}
               </td>
@@ -165,15 +171,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
+import WarehouseOptionSelect from "@/components/warehouse/filters/WarehouseOptionSelect.vue";
 import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
 import MmrSelect from "@/components/common/MmrSelect.vue";
 import WarehouseCodeChip from "@/components/warehouse/WarehouseCodeChip.vue";
 import WarehouseReplaysTable from "@/components/warehouse/WarehouseReplaysTable.vue";
-import RaceIcon from "@/components/player/RaceIcon.vue";
 import WarehouseService from "@/services/WarehouseService";
 import type { Mmr } from "@/store/match/types";
-import { ERaceEnum } from "@/store/types";
-import { raceToEnum } from "@/components/warehouse/warehouse-helpers";
 import { formatSecondsToDuration } from "@/helpers/date-functions";
 import type {
   MapEntry,
@@ -183,18 +187,27 @@ import type {
   Race,
   ReplayMetadata,
 } from "@/store/warehouse/types";
-import { mdiChevronRight, mdiClose, mdiPlayBoxMultiple } from "@mdi/js";
+import { useI18n } from "vue-i18n";
+import { mdiChevronDown, mdiClose, mdiPlayBoxMultiple, mdiSort } from "@mdi/js";
+
+const { t } = useI18n();
 
 const maps = ref<MapEntry[]>([]);
 
 const myRace = ref<Race>("Human");
+const rolledRace = ref<string>("any");
 const opponentRace = ref<Race | null>(null);
 const mapName = ref<string | null>(null);
 const mmr = ref<Mmr>({ min: 0, max: 3000 });
 const sort = ref<"popular" | "winrate">("popular");
-const prefix = ref<string[]>([]);
 
-const children = ref<OpenerChild[]>([]);
+// The visible tree, flattened in render order. Expanding a node fetches its
+// children (one trie level) and inserts them right below it — sibling paths
+// stay visible, unlike a drill-down that replaces the whole view.
+interface TreeRow extends OpenerChild {
+  expanded?: boolean;
+}
+const rows = ref<TreeRow[]>([]);
 const codes = ref<Record<string, OpenerCode>>({});
 const totals = ref(0);
 const loading = ref(false);
@@ -206,15 +219,16 @@ const dialogReplays = ref<ReplayMetadata[]>([]);
 const dialogCount = ref(0);
 const dialogPrefix = ref<string[]>([]);
 
-function raceEnum(race: Race): ERaceEnum {
-  return raceToEnum(race);
-}
-
-function buildParams(): OpenersParams {
-  const params: OpenersParams = { race: myRace.value, sort: sort.value };
+function buildParams(prefix: string[]): OpenersParams {
+  // Analytics is match-linked-only: every aggregated or listed replay maps to
+  // a w3champions match, so replay rows always deep-link to match history.
+  const params: OpenersParams = { race: myRace.value, sort: sort.value, w3c_linked_only: true };
+  if (myRace.value === "Random" && rolledRace.value !== "any") {
+    params.rolled_race = rolledRace.value as Race;
+  }
   if (opponentRace.value) params.opponent_race = opponentRace.value;
   if (mapName.value) params.map_name = mapName.value;
-  if (prefix.value.length) params.prefix = prefix.value;
+  if (prefix.length) params.prefix = prefix;
   if (mmr.value.min > 0) params.min_mmr = mmr.value.min;
   if (mmr.value.max < 3000) params.max_mmr = mmr.value.max;
   return params;
@@ -224,21 +238,39 @@ async function load(): Promise<void> {
   loading.value = true;
   apiError.value = "";
   try {
-    const res = await WarehouseService.getOpeners(buildParams());
-    children.value = res.children;
+    const res = await WarehouseService.getOpeners(buildParams([]));
+    rows.value = res.children;
     codes.value = res.codes;
     totals.value = res.totals.matches;
   } catch (e) {
     apiError.value = e instanceof Error ? e.message : "Openers request failed";
-    children.value = [];
+    rows.value = [];
   } finally {
     loading.value = false;
   }
 }
 
-// New codes shown for a child = the path segment below the current prefix.
-function newCodes(child: OpenerChild): string[] {
-  return child.prefix.slice(prefix.value.length);
+async function toggle(row: TreeRow): Promise<void> {
+  if (row.branch_factor <= 0) return;
+  const at = rows.value.indexOf(row);
+  if (at < 0) return;
+  if (row.expanded) {
+    // Collapse: drop every visible descendant (their prefixes extend ours).
+    const isDescendant = (r: TreeRow) =>
+      r.prefix.length > row.prefix.length &&
+      row.prefix.every((c, i) => r.prefix[i] === c);
+    rows.value = rows.value.filter((r) => !isDescendant(r));
+    row.expanded = false;
+    return;
+  }
+  try {
+    const res = await WarehouseService.getOpeners(buildParams(row.prefix));
+    codes.value = { ...codes.value, ...res.codes };
+    rows.value.splice(at + 1, 0, ...res.children);
+    row.expanded = true;
+  } catch (e) {
+    apiError.value = e instanceof Error ? e.message : "Openers request failed";
+  }
 }
 
 function winrate(child: OpenerChild): number {
@@ -265,17 +297,6 @@ function avgDuration(child: OpenerChild): string {
   return formatSecondsToDuration(Math.round(child.avg_duration_min * 60));
 }
 
-function drillInto(child: OpenerChild): void {
-  prefix.value = [...child.prefix];
-  load();
-}
-
-function jumpTo(depth: number): void {
-  if (depth >= prefix.value.length) return;
-  prefix.value = prefix.value.slice(0, depth);
-  load();
-}
-
 async function showReplays(child: OpenerChild): Promise<void> {
   dialogPrefix.value = [...child.prefix];
   dialogOpen.value = true;
@@ -285,6 +306,10 @@ async function showReplays(child: OpenerChild): Promise<void> {
     const body = {
       race: myRace.value,
       prefix: child.prefix,
+      w3c_linked_only: true,
+      ...(myRace.value === "Random" && rolledRace.value !== "any"
+        ? { rolled_race: rolledRace.value as Race }
+        : {}),
       ...(opponentRace.value ? { opponent_race: opponentRace.value } : {}),
       ...(mapName.value ? { map_name: mapName.value } : {}),
       ...(mmr.value.min > 0 ? { min_mmr: mmr.value.min } : {}),
@@ -301,23 +326,42 @@ async function showReplays(child: OpenerChild): Promise<void> {
   }
 }
 
-// Changing any scope filter resets the trie to its root.
+// Changing any scope filter resets the tree to its root level.
 function setFilter(key: "myRace" | "opponentRace" | "mapName", value: string | null): void {
-  if (key === "myRace") myRace.value = (value as Race) ?? "Human";
+  if (key === "myRace") {
+    myRace.value = (value as Race) ?? "Human";
+    if (myRace.value !== "Random") rolledRace.value = "any";
+  }
   if (key === "opponentRace") opponentRace.value = value as Race | null;
   if (key === "mapName") mapName.value = value;
-  prefix.value = [];
+  load();
+}
+
+const rolledOptions = [
+  { value: "any", title: t("components_warehouse_openers.rolledAny") },
+  { value: "Human", title: t("races.HUMAN") },
+  { value: "Orc", title: t("races.ORC") },
+  { value: "NightElf", title: t("races.NIGHT_ELF") },
+  { value: "Undead", title: t("races.UNDEAD") },
+];
+
+function onRolled(v: string): void {
+  rolledRace.value = v;
   load();
 }
 
 function onMmr(v: Mmr): void {
   mmr.value = v;
-  prefix.value = [];
   load();
 }
 
-function onSort(v: "popular" | "winrate"): void {
-  sort.value = v;
+const sortOptions = [
+  { value: "popular", title: t("components_warehouse_openers.popular") },
+  { value: "winrate", title: t("components_warehouse_openers.highWinrate") },
+];
+
+function onSort(v: string): void {
+  sort.value = v === "winrate" ? "winrate" : "popular";
   load();
 }
 
@@ -346,16 +390,20 @@ onMounted(async () => {
   flex-wrap: nowrap;
 }
 
-.wh-crumb-clickable {
-  cursor: pointer;
+.wh-chain-dim {
+  opacity: 0.45;
 }
 
-// Winrate cell tint — the site's won/lost hues (see w3-won / w3-lost) as
-// backgrounds, two alpha steps per arm; the printed % stays the primary
-// encoding, the tint is a glance layer.
-.wh-wr-u1 { background: rgba(76, 175, 80, 0.1); }
-.wh-wr-u2 { background: rgba(76, 175, 80, 0.22); }
-.wh-wr-mid { background: rgba(128, 128, 128, 0.08); }
-.wh-wr-d1 { background: rgba(229, 57, 53, 0.1); }
-.wh-wr-d2 { background: rgba(229, 57, 53, 0.22); }
+.wh-expand-tile {
+  min-width: 34px;
+}
+
+// Winrate cell tint — the theme's own success/lost tokens as backgrounds
+// (adapts to all four race themes), two alpha steps per arm; the printed %
+// stays the primary encoding, the tint is a glance layer.
+.wh-wr-u1 { background: rgba(var(--v-theme-success), 0.1); }
+.wh-wr-u2 { background: rgba(var(--v-theme-success), 0.22); }
+.wh-wr-mid { background: rgba(var(--v-theme-on-surface), 0.06); }
+.wh-wr-d1 { background: rgba(var(--v-theme-lost), 0.1); }
+.wh-wr-d2 { background: rgba(var(--v-theme-lost), 0.22); }
 </style>
