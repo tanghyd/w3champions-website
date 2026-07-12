@@ -1,0 +1,329 @@
+<template>
+  <div>
+    <div class="d-flex align-center flex-wrap ga-2 mb-2">
+      <warehouse-option-select
+        :model-value="category"
+        :label="$t('components_warehouse_statevents.timelineLabel')"
+        :options="categoryOptions"
+        @update:model-value="(v) => (category = v as Category)"
+      />
+    </div>
+
+    <div class="wh-tl elevation-1">
+      <div v-for="slot in slots" :key="slot" class="wh-tl-lane">
+        <div class="wh-tl-name text-caption">
+          <span class="wh-tl-swatch" :style="{ background: slotColor(slot) }"></span>
+          {{ slotName(slot) }}
+        </div>
+        <div class="wh-tl-track">
+          <div class="wh-tl-line" :style="{ background: slotColor(slot) }"></div>
+          <span
+            v-for="(dot, di) in dotsBySlot[slot] ?? []"
+            :key="'d' + di"
+            class="wh-tl-dot"
+            :style="{ left: dot.pct + '%', background: slotColor(slot) }"
+            :title="dot.title"
+          ></span>
+          <div
+            v-for="(m, mi) in markersBySlot[slot] ?? []"
+            :key="'m' + mi"
+            class="wh-tl-marker"
+            :style="{ left: m.pct + '%' }"
+            :title="m.title"
+          >
+            <div class="wh-tl-stem" :style="{ height: 6 + m.tier * 34 + 'px', background: slotColor(slot) }"></div>
+            <img v-if="m.icon" :src="assetUrl(m.icon)" class="wh-tl-icon" :class="{ 'wh-tl-bad': m.bad }" alt="" />
+            <span v-else class="wh-tl-noicon" :class="{ 'wh-tl-bad': m.bad }">{{ m.fallback }}</span>
+            <span v-if="m.badge" class="wh-tl-badge number-text">{{ m.badge }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="wh-tl-axis">
+        <span
+          v-for="tick in axisTicks"
+          :key="tick.pct"
+          class="wh-tl-tick number-text text-medium-emphasis"
+          :style="{ left: tick.pct + '%' }"
+        >{{ tick.label }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import WarehouseOptionSelect from "@/components/warehouse/filters/WarehouseOptionSelect.vue";
+import { iconUrlFor } from "@/components/warehouse/warehouse-icons";
+import { warehouseAssetUrl } from "@/services/WarehouseService";
+import type { StatEventsDetail } from "@/store/warehouse/types";
+
+// wc3.no-style match timeline: one lane per player, small dots for every
+// build start, icon markers (with collision-tiered stems) for the selected
+// event category. Pure HTML/absolute positioning — no chart lib.
+const { detail, slotColor } = defineProps<{
+  detail: StatEventsDetail;
+  slotColor: (slot: number) => string;
+}>();
+
+const { t } = useI18n();
+
+type Category = "heroes" | "skills" | "tech" | "research" | "items" | "cancels" | "herokills";
+const category = ref<Category>("tech");
+
+const categoryOptions = [
+  { value: "tech", title: t("components_warehouse_statevents.catTech") },
+  { value: "heroes", title: t("components_warehouse_statevents.catHeroes") },
+  { value: "skills", title: t("components_warehouse_statevents.catSkills") },
+  { value: "research", title: t("components_warehouse_statevents.catResearch") },
+  { value: "items", title: t("components_warehouse_statevents.catItems") },
+  { value: "cancels", title: t("components_warehouse_statevents.catCancels") },
+  { value: "herokills", title: t("components_warehouse_statevents.catHeroKills") },
+];
+
+const slots = computed<number[]>(() => (detail.replay.players ?? []).map((p) => p.slot));
+const duration = computed<number>(() => Math.max(detail.replay.duration_s, 1));
+
+function slotName(slot: number): string {
+  return detail.slot_names?.[String(slot)] ?? `slot ${slot}`;
+}
+
+function pctOf(t_s: number): number {
+  return Math.min(100, Math.max(0, (t_s / duration.value) * 100));
+}
+
+function assetUrl(path: string): string {
+  return warehouseAssetUrl(path);
+}
+
+interface Marker {
+  pct: number;
+  tier: number;
+  icon: string | null;
+  fallback: string;
+  title: string;
+  badge?: string;
+  bad?: boolean;
+}
+
+interface RawMarker extends Omit<Marker, "tier"> {
+  t: number;
+}
+
+// Collision handling like wc3.no: markers close in time climb to a higher
+// stem tier instead of overlapping. Percent-based threshold (~icon width on
+// a typical viewport); wraps back down once horizontal space frees up.
+const TIER_GAP_PCT = 2.4;
+const TIERS = 3;
+function tiered(raw: RawMarker[]): Marker[] {
+  const sorted = [...raw].sort((a, b) => a.t - b.t);
+  const lastAt: number[] = Array(TIERS).fill(-Infinity);
+  return sorted.map((m) => {
+    let tier = lastAt.findIndex((last) => m.pct - last >= TIER_GAP_PCT);
+    if (tier === -1) tier = lastAt.indexOf(Math.min(...lastAt));
+    lastAt[tier] = m.pct;
+    const { t: _t, ...rest } = m;
+    return { ...rest, tier };
+  });
+}
+
+function fallbackText(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("");
+}
+
+function mk(t_s: number, clock: string, code: string | null, name: string, extra: Partial<RawMarker> = {}): RawMarker {
+  return {
+    t: t_s,
+    pct: pctOf(t_s),
+    icon: iconUrlFor(code, name),
+    fallback: fallbackText(name),
+    title: `${clock} — ${name}`,
+    ...extra,
+  };
+}
+
+const isHeroCode = (code: string) => /^[A-Z]/.test(code);
+
+const markersBySlot = computed<Record<number, Marker[]>>(() => {
+  const out: Record<number, RawMarker[]> = {};
+  const push = (slot: number, m: RawMarker) => (out[slot] ??= []).push(m);
+  const cat = category.value;
+
+  if (cat === "tech" || cat === "research" || cat === "heroes") {
+    for (const [slot, rows] of Object.entries(detail.build_by_slot ?? {})) {
+      for (const r of rows) {
+        if (r.phase !== "complete") continue;
+        const hero = r.kind === "unit" && isHeroCode(r.type_code);
+        if (cat === "tech" && r.kind !== "structure") continue;
+        if (cat === "research" && r.kind !== "research" && r.kind !== "upgrade") continue;
+        if (cat === "heroes" && !hero) continue;
+        push(Number(slot), mk(r.t, r.clock, r.type_code, r.name));
+      }
+    }
+  }
+  if (cat === "cancels") {
+    for (const [slot, rows] of Object.entries(detail.build_by_slot ?? {})) {
+      for (const r of rows) {
+        if (r.phase !== "cancel") continue;
+        const started = r.start_clock ? ` (${t("components_warehouse_statevents.cancelledOfStart", { clock: r.start_clock })})` : "";
+        push(Number(slot), { ...mk(r.t, r.clock, r.type_code, r.name), bad: true, title: `${r.clock} — ${r.name}${started}` });
+      }
+    }
+  }
+  if (cat === "heroes" || cat === "skills" || cat === "items") {
+    for (const [slot, rows] of Object.entries(detail.heroes_by_slot ?? {})) {
+      for (const r of rows) {
+        if (cat === "heroes" && r.event === "HeroLevel") {
+          push(Number(slot), {
+            ...mk(r.game_time_s, r.clock, r.hero_code, `${r.hero} — level ${r.amount}`),
+            icon: iconUrlFor(r.hero_code, r.hero),
+            badge: String(r.amount),
+          });
+        } else if (cat === "skills" && r.event === "HeroSkill") {
+          push(Number(slot), mk(r.game_time_s, r.clock, null, r.detail, { title: `${r.clock} — ${r.hero}: ${r.detail}` }));
+        } else if (cat === "items" && (r.event === "HeroItemPickup" || r.event === "HeroItemBought")) {
+          push(Number(slot), mk(r.game_time_s, r.clock, null, r.detail));
+        }
+      }
+    }
+  }
+  if (cat === "herokills") {
+    // Hero deaths drawn on the VICTIM's lane; the tooltip names the killer.
+    for (const r of detail.deaths) {
+      if (!r.is_hero) continue;
+      const by = r.killer_name ? ` — ${t("components_warehouse_statevents.killedBy").toLowerCase()} ${r.killer_name}${r.killer ? ` (${r.killer})` : ""}` : "";
+      push(r.victim_slot, { ...mk(r.game_time_s, r.clock, r.type_code, r.name), bad: true, title: `${r.clock} — ${r.name}${by}` });
+    }
+  }
+
+  return Object.fromEntries(Object.entries(out).map(([slot, raw]) => [slot, tiered(raw)]));
+});
+
+// Every build start as a small dot on the lane, whatever the category —
+// the "pulse" of the game, like wc3.no's baseline dots.
+const dotsBySlot = computed<Record<number, { pct: number; title: string }[]>>(() => {
+  const out: Record<number, { pct: number; title: string }[]> = {};
+  for (const [slot, rows] of Object.entries(detail.build_by_slot ?? {})) {
+    out[Number(slot)] = rows
+      .filter((r) => r.phase === "start")
+      .map((r) => ({ pct: pctOf(r.t), title: `${r.clock} — ${r.name}` }));
+  }
+  return out;
+});
+
+const axisTicks = computed<{ pct: number; label: string }[]>(() => {
+  const total = duration.value;
+  const stepS = total > 1800 ? 300 : total > 900 ? 120 : 60;
+  const ticks: { pct: number; label: string }[] = [];
+  for (let s = 0; s <= total; s += stepS) {
+    ticks.push({ pct: pctOf(s), label: `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` });
+  }
+  return ticks;
+});
+</script>
+
+<style scoped>
+.wh-tl {
+  padding: 8px 40px 26px;
+  overflow: hidden;
+}
+
+.wh-tl-lane {
+  margin-bottom: 4px;
+}
+
+.wh-tl-name {
+  margin-bottom: 2px;
+}
+
+.wh-tl-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 6px;
+}
+
+.wh-tl-track {
+  position: relative;
+  height: 128px;
+}
+
+.wh-tl-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5px;
+  height: 2px;
+  opacity: 0.8;
+}
+
+.wh-tl-dot {
+  position: absolute;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+
+.wh-tl-marker {
+  position: absolute;
+  bottom: 6px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+
+.wh-tl-stem {
+  width: 2px;
+  opacity: 0.55;
+}
+
+.wh-tl-icon,
+.wh-tl-noicon {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+
+.wh-tl-bad {
+  border: 2px solid rgba(var(--v-theme-lost), 0.9);
+}
+
+.wh-tl-badge {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  text-align: center;
+  color: #fff;
+  background: rgba(var(--v-theme-primary), 0.95);
+}
+
+.wh-tl-axis {
+  position: relative;
+  height: 16px;
+  margin-top: 4px;
+}
+
+.wh-tl-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+}
+</style>

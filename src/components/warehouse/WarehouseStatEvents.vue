@@ -74,6 +74,14 @@
           </v-chip>
         </div>
 
+        <!-- Match overview -->
+        <div class="text-h6 mb-2">{{ $t("components_warehouse_statevents.overview") }}</div>
+        <warehouse-stat-events-overview :detail="detail" />
+
+        <!-- Timeline -->
+        <div class="text-h6 mb-1">{{ $t("components_warehouse_statevents.timeline") }}</div>
+        <warehouse-stat-events-timeline :detail="detail" :slot-color="slotColor" class="mb-4" />
+
         <!-- Build orders -->
         <div class="text-h6 mb-1">{{ $t("components_warehouse_statevents.buildOrders") }}</div>
         <div class="d-flex align-center flex-wrap ga-2 mb-2">
@@ -295,6 +303,8 @@ import { Line as LineChartGeneric } from "vue-chartjs";
 import WarehouseService from "@/services/WarehouseService";
 import WarehouseEntityIcon from "@/components/warehouse/WarehouseEntityIcon.vue";
 import WarehouseStatEventsMinimap from "@/components/warehouse/WarehouseStatEventsMinimap.vue";
+import WarehouseStatEventsOverview from "@/components/warehouse/WarehouseStatEventsOverview.vue";
+import WarehouseStatEventsTimeline from "@/components/warehouse/WarehouseStatEventsTimeline.vue";
 import RaceIcon from "@/components/player/RaceIcon.vue";
 import { ERaceEnum } from "@/store/types";
 import { raceToEnum } from "@/components/warehouse/warehouse-helpers";
