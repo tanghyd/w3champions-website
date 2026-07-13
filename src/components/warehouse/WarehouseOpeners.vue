@@ -30,6 +30,12 @@
           :maps="maps"
           @update:model-value="(v) => setFilter('mapName', v)"
         />
+        <warehouse-player-select
+          :model-value="playerNames"
+          :label="$t('views_warehouse.player')"
+          :players="players"
+          @update:model-value="onPlayers"
+        />
         <mmr-select :mmr="mmr" @mmrFilterChanged="onMmr" />
         <warehouse-option-select
           :model-value="sort"
@@ -173,6 +179,7 @@ import { onMounted, ref } from "vue";
 import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSelect.vue";
 import WarehouseOptionSelect from "@/components/warehouse/filters/WarehouseOptionSelect.vue";
 import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
+import WarehousePlayerSelect from "@/components/warehouse/filters/WarehousePlayerSelect.vue";
 import MmrSelect from "@/components/common/MmrSelect.vue";
 import WarehouseCodeChip from "@/components/warehouse/WarehouseCodeChip.vue";
 import WarehouseReplaysTable from "@/components/warehouse/WarehouseReplaysTable.vue";
@@ -184,6 +191,7 @@ import type {
   OpenerChild,
   OpenerCode,
   OpenersParams,
+  PlayerEntry,
   Race,
   ReplayMetadata,
 } from "@/store/warehouse/types";
@@ -193,11 +201,13 @@ import { mdiChevronDown, mdiClose, mdiPlayBoxMultiple, mdiSort } from "@mdi/js";
 const { t } = useI18n();
 
 const maps = ref<MapEntry[]>([]);
+const players = ref<PlayerEntry[]>([]);
 
 const myRace = ref<Race>("Human");
 const rolledRace = ref<string>("any");
 const opponentRace = ref<Race | null>(null);
 const mapName = ref<string | null>(null);
+const playerNames = ref<string[]>([]);
 const mmr = ref<Mmr>({ min: 0, max: 3000 });
 const sort = ref<"popular" | "winrate">("popular");
 
@@ -229,6 +239,7 @@ function buildParams(prefix: string[]): OpenersParams {
   if (opponentRace.value) params.opponent_race = opponentRace.value;
   if (mapName.value) params.map_name = mapName.value;
   if (prefix.length) params.prefix = prefix;
+  if (playerNames.value.length) params.players = playerNames.value;
   if (mmr.value.min > 0) params.min_mmr = mmr.value.min;
   if (mmr.value.max < 3000) params.max_mmr = mmr.value.max;
   return params;
@@ -312,6 +323,7 @@ async function showReplays(child: OpenerChild): Promise<void> {
         : {}),
       ...(opponentRace.value ? { opponent_race: opponentRace.value } : {}),
       ...(mapName.value ? { map_name: mapName.value } : {}),
+      ...(playerNames.value.length ? { players: playerNames.value } : {}),
       ...(mmr.value.min > 0 ? { min_mmr: mmr.value.min } : {}),
       ...(mmr.value.max < 3000 ? { max_mmr: mmr.value.max } : {}),
     };
@@ -355,6 +367,11 @@ function onMmr(v: Mmr): void {
   load();
 }
 
+function onPlayers(v: string[]): void {
+  playerNames.value = v;
+  load();
+}
+
 const sortOptions = [
   { value: "popular", title: t("components_warehouse_openers.popular") },
   { value: "winrate", title: t("components_warehouse_openers.highWinrate") },
@@ -366,8 +383,12 @@ function onSort(v: string): void {
 }
 
 async function loadReference(): Promise<void> {
-  const mapsRes = await Promise.allSettled([WarehouseService.getMaps()]);
-  if (mapsRes[0].status === "fulfilled") maps.value = mapsRes[0].value;
+  const [mapsRes, playersRes] = await Promise.allSettled([
+    WarehouseService.getMaps(),
+    WarehouseService.getPlayers(),
+  ]);
+  if (mapsRes.status === "fulfilled") maps.value = mapsRes.value;
+  if (playersRes.status === "fulfilled") players.value = playersRes.value;
 }
 
 onMounted(async () => {
