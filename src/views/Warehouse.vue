@@ -42,7 +42,11 @@
             >
               {{ $t("views_warehouse.offline") }}
             </v-alert>
-            <router-view />
+            <router-view v-slot:default="{ Component }">
+              <keep-alive>
+                <component :is="Component" />
+              </keep-alive>
+            </router-view>
           </v-card-text>
         </v-card>
       </v-col>
