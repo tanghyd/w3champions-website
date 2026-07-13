@@ -49,6 +49,9 @@
                   >
                     {{ p.name }}
                   </router-link>
+                  <v-chip v-for="tag in tagsFor(p)" :key="tag" size="x-small" variant="tonal" color="secondary">
+                    {{ tag }}
+                  </v-chip>
                   <span v-if="p.old_mmr != null" class="number-text text-medium-emphasis wh-mmr">{{ p.old_mmr }}</span>
                   <player-icon :key="p.race" :race="raceEnum(p.race)" :left="false" />
                 </div>
@@ -70,6 +73,9 @@
                   >
                     {{ p.name }}
                   </router-link>
+                  <v-chip v-for="tag in tagsFor(p)" :key="tag" size="x-small" variant="tonal" color="secondary">
+                    {{ tag }}
+                  </v-chip>
                   <span v-if="p.old_mmr != null" class="number-text text-medium-emphasis wh-mmr">{{ p.old_mmr }}</span>
                   <div class="wh-heroes">
                     <warehouse-hero-icon
@@ -153,8 +159,10 @@ import {
 } from "@/helpers/date-functions";
 import { mdiDownload } from "@mdi/js";
 
-const { replays = [] } = defineProps<{
+const { replays = [], tagNamespaces = [] } = defineProps<{
   replays?: ReplayMetadata[];
+  // Annotation namespaces (e.g. "gnl-s18") to render as chips next to each player.
+  tagNamespaces?: string[];
 }>();
 
 const router = useRouter();
@@ -178,6 +186,15 @@ function raceEnum(race: string): ERaceEnum {
 
 function profileUrl(name: string): string {
   return getProfileUrl(name);
+}
+
+// annotations keys are "<namespace>:<key>" (see PlayerMetadata); a namespace
+// can carry more than one key (e.g. "team" and "role"), show every value.
+function tagsFor(p: PlayerMetadata): string[] {
+  if (!tagNamespaces.length) return [];
+  return Object.entries(p.annotations ?? {})
+    .filter(([k]) => tagNamespaces.some((ns) => k.startsWith(`${ns}:`)))
+    .map(([, v]) => v);
 }
 
 function duration(replay: ReplayMetadata): string {

@@ -32,6 +32,9 @@ const data = {
       of: "of",
       seasonsSelected: "{n} seasons",
       playersSelected: "{n} players",
+      tags: "Tags",
+      tagCategoriesSelected: "{n} tag categories",
+      noTags: "No tags loaded",
     },
     components_warehouse_table: {
       map: "Map",

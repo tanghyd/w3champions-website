@@ -53,6 +53,12 @@
         hide-details
         color="primary"
       />
+      <warehouse-tag-select
+        :model-value="tagNamespaces"
+        :label="$t('views_warehouse.tags')"
+        :entries="annotations"
+        @update:model-value="(v) => (tagNamespaces = v)"
+      />
     </div>
 
     <!-- Sequence groups -->
@@ -233,7 +239,7 @@
         {{ $t("components_warehouse_search.matchingReplays", { n: count }) }}
       </div>
 
-      <warehouse-replays-table :replays="replays" />
+      <warehouse-replays-table :replays="replays" :tag-namespaces="tagNamespaces" />
     </template>
   </div>
 </template>
@@ -245,12 +251,14 @@ import WarehouseRaceSelect from "@/components/warehouse/filters/WarehouseRaceSel
 import WarehouseMapSelect from "@/components/warehouse/filters/WarehouseMapSelect.vue";
 import WarehouseSeasonSelect from "@/components/warehouse/filters/WarehouseSeasonSelect.vue";
 import WarehousePlayerSelect from "@/components/warehouse/filters/WarehousePlayerSelect.vue";
+import WarehouseTagSelect from "@/components/warehouse/filters/WarehouseTagSelect.vue";
 import MmrSelect from "@/components/common/MmrSelect.vue";
 import DurationSelect from "@/components/common/DurationSelect.vue";
 import WarehouseReplaysTable from "@/components/warehouse/WarehouseReplaysTable.vue";
 import WarehouseService, { warehouseAssetUrl } from "@/services/WarehouseService";
 import type { Mmr } from "@/store/match/types";
 import type {
+  AnnotationEntry,
   EventType,
   MapEntry,
   MappingEntry,
@@ -305,6 +313,7 @@ const mmr = ref<Mmr>({ min: 0, max: 3000 });
 const duration = ref<{ min: number; max: number }>({ min: 0, max: 14400 });
 const playerNames = ref<string[]>([]);
 const playersMatchAll = ref(false);
+const tagNamespaces = ref<string[]>([]);
 
 const groups = ref<GroupForm[]>([]);
 
@@ -312,6 +321,7 @@ const groups = ref<GroupForm[]>([]);
 const maps = ref<MapEntry[]>([]);
 const seasonEntries = ref<SeasonEntry[]>([]);
 const players = ref<PlayerEntry[]>([]);
+const annotations = ref<AnnotationEntry[]>([]);
 const mappingCache = reactive<Record<string, MappingEntry[]>>({});
 
 // Results
@@ -466,14 +476,16 @@ async function runSearch(): Promise<void> {
 }
 
 onMounted(async () => {
-  const [mapsRes, seasonsRes, playersRes] = await Promise.allSettled([
+  const [mapsRes, seasonsRes, playersRes, annotationsRes] = await Promise.allSettled([
     WarehouseService.getMaps(),
     WarehouseService.getSeasons(),
     WarehouseService.getPlayers(),
+    WarehouseService.getAnnotations(),
   ]);
   if (mapsRes.status === "fulfilled") maps.value = mapsRes.value;
   if (seasonsRes.status === "fulfilled") seasonEntries.value = seasonsRes.value;
   if (playersRes.status === "fulfilled") players.value = playersRes.value;
+  if (annotationsRes.status === "fulfilled") annotations.value = annotationsRes.value;
 });
 </script>
 

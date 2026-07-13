@@ -129,6 +129,15 @@ export interface PlayerEntry {
   replays: number;
 }
 
+// GET /v1/annotations — reference data for external player labels
+// (annotations.players), e.g. namespace "gnl-s18", key "team".
+export interface AnnotationEntry {
+  namespace: string;
+  key: string;
+  value: string;
+  players: number;
+}
+
 // GET /v1/stats
 export interface MatchupStat {
   race_a: string;

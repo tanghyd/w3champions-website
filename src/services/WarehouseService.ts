@@ -1,5 +1,5 @@
 import { WAREHOUSE_URL } from "@/config/env";
-import type { EventType, MapEntry, MappingEntry, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, SearchRequest, SearchResponse, SeasonEntry, StatEventsDetail, StatEventsReplay, StatsParams, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
+import type { AnnotationEntry, EventType, MapEntry, MappingEntry, OpenerReplaysRequest, OpenerReplaysResponse, OpenersParams, OpenersResponse, PlayerEntry, SearchRequest, SearchResponse, SeasonEntry, StatEventsDetail, StatEventsReplay, StatsParams, WarehouseHealth, WarehouseStats } from "@/store/warehouse/types";
 
 // WAREHOUSE_URL may carry a trailing slash; the API lives under <base>/v1.
 const BASE = WAREHOUSE_URL.replace(/\/$/, "");
@@ -83,6 +83,10 @@ export default class WarehouseService {
 
   public static getPlayers(): Promise<PlayerEntry[]> {
     return getJson<PlayerEntry[]>("/players");
+  }
+
+  public static getAnnotations(): Promise<AnnotationEntry[]> {
+    return getJson<AnnotationEntry[]>("/annotations");
   }
 
   public static getStats(params?: StatsParams): Promise<WarehouseStats> {
